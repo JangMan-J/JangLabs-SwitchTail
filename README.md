@@ -66,5 +66,5 @@ the park/resume contract, and monitor idempotency.
 | `SWITCHTAIL_DIR` | `~/JangLabs` | The labs workspace to scan |
 | `SWITCHTAIL_LAYOUT` | — | Cockpit tab layout override |
 | `SWITCHTAIL_INCLUDE_SHELL` | `0` | Offer a shell pane per cockpit |
-| `SWITCHTAIL_FLEET_MAX` | `5` | Max panes per fleet op |
+| `SWITCHTAIL_FLEET_MAX` | `12` | Max panes per fleet op |
 | `SWITCHTAIL_TAB_SIZE` | `5` | Panes packed per cockpit tab |
