@@ -192,6 +192,49 @@ _launch_detached() {  # "$@" = command to run detached
   disown 2>/dev/null || true
 }
 
+# ---------- shared: THE session emitter (single source of the kitty session grammar) ----------
+# Every session this tool produces — per-lab file, aggregate, transient fleet, transient build —
+# flows through here, so the launch-line shape, the --var tags, and the packing rules live in
+# exactly ONE place (this is the future multiplexer seam: a different backend means a different
+# body for this function, not four scattered heredocs). Callers fill four parallel pane arrays
+# via bash dynamic scope (the same pattern _build_resolve already uses):
+#   E_DIR[i]   pane working dir         E_LAB[i]   lab/slug (--var lab=, cockpit's 1st arg)
+#   E_KIND[i]  claude|shell|cmd:<argv>  E_TITLE[i] pane title
+# Args: $1=window class  $2=layout  $3=tabmax:
+#   0  = single tab: layout once up top, cd whenever the pane dir changes, focus the first pane.
+#   >0 = pack N panes/tab: new_tab boundaries (named by the tab's first slug), per-tab cd+layout,
+#        focus per tab master, focus_tab 0 trailer.
+# Per pane: --var cockpit collapses cmd:<argv> to a space-free 'cmd' (the park kitten only needs
+# to tell claude from non-claude); the FULL kind is passed quoted as stail cockpit's 3rd arg.
+_emit_session() {  # $1=class $2=layout $3=tabmax ; reads E_DIR/E_LAB/E_KIND/E_TITLE
+  local cls="$1" layout="$2" tabmax="${3:-0}"
+  local i in_tab=0 first_tab=1 prev_dir="" kind cvar
+  if [ "$tabmax" -eq 0 ]; then
+    echo "layout $layout"
+  fi
+  echo "os_window_class $cls"
+  for (( i=0; i<${#E_DIR[@]}; i++ )); do
+    if [ "$tabmax" -gt 0 ] && [ "$in_tab" -eq 0 ]; then
+      if [ "$first_tab" = 1 ]; then first_tab=0; else echo "new_tab $(_display_name "${E_LAB[$i]}")"; fi
+      echo "cd ${E_DIR[$i]}"
+      echo "layout $layout"
+    elif [ "$tabmax" -eq 0 ] && [ "${E_DIR[$i]}" != "$prev_dir" ]; then
+      echo "cd ${E_DIR[$i]}"; prev_dir="${E_DIR[$i]}"
+    fi
+    kind="${E_KIND[$i]}"
+    case "$kind" in cmd:*) cvar="cmd" ;; *) cvar="$kind" ;; esac
+    echo "launch --title \"${E_TITLE[$i]}\" --var lab=${E_LAB[$i]} --var cockpit=$cvar stail cockpit ${E_LAB[$i]} \"${E_DIR[$i]}\" \"$kind\""
+    if [ "$tabmax" -gt 0 ]; then
+      [ "$in_tab" -eq 0 ] && echo "focus"
+      in_tab=$((in_tab+1)); [ "$in_tab" -ge "$tabmax" ] && in_tab=0
+    else
+      [ "$i" -eq 0 ] && echo "focus"
+    fi
+  done
+  [ "$tabmax" -gt 0 ] && echo "focus_tab 0"
+  return 0
+}
+
 # ---------- generate helpers (read cmd_generate's locals via bash dynamic scope) ----------
 _gen_is_submodule() {  # 0 if $1 is a path in .gitmodules
   git -C "$WORKSPACE" config --file "$WORKSPACE/.gitmodules" --get-regexp '^submodule\..*\.path$' 2>/dev/null \
@@ -202,31 +245,27 @@ _gen_emit_lab() {
   local lab="$1" path="$WORKSPACE/$1" file="$OUTDIR/$1$EXT" kind LAB
   kind="$(_gen_is_submodule "$lab" && echo 'submodule' || echo 'unregistered git repo')"
   LAB="$(_display_name "$lab")"
+  local -a E_DIR=("$path") E_LAB=("$lab") E_KIND=(claude) E_TITLE=("$LAB")
+  if [ "$INCLUDE_SHELL" = "1" ]; then
+    E_DIR+=("$path"); E_LAB+=("$lab"); E_KIND+=(shell); E_TITLE+=("$LAB shell")
+  fi
   {
     echo "$HDR"
     echo "# Lab: $lab ($kind)"
-    echo "layout $LAYOUT"
-    echo "os_window_class switchtail-$lab"
-    echo "cd $path"
-    echo "launch --title \"$LAB\" --var lab=$lab --var cockpit=claude stail cockpit $lab \"$path\" claude"
-    echo "focus"
-    [ "$INCLUDE_SHELL" = "1" ] && echo "launch --title \"$LAB shell\" --var lab=$lab --var cockpit=shell stail cockpit $lab \"$path\" shell"
+    _emit_session "switchtail-$lab" "$LAYOUT" 0
   } > "$file"
 }
 
 _gen_emit_all() {
-  local file="$OUTDIR/switchtail-all$EXT" lab first=1 LAB
+  local file="$OUTDIR/switchtail-all$EXT" lab
+  local -a E_DIR=() E_LAB=() E_KIND=() E_TITLE=()
+  for lab in "${LABS[@]}"; do
+    E_DIR+=("$WORKSPACE/$lab"); E_LAB+=("$lab"); E_KIND+=(claude); E_TITLE+=("$(_display_name "$lab")")
+  done
   {
     echo "$HDR"
     echo "# Aggregate cockpit: one claude per active lab, master+stack (first lab = master)."
-    echo "layout $LAYOUT"
-    echo "os_window_class switchtail-all"
-    for lab in "${LABS[@]}"; do
-      LAB="$(_display_name "$lab")"
-      echo "cd $WORKSPACE/$lab"
-      echo "launch --title \"$LAB\" --var lab=$lab --var cockpit=claude stail cockpit $lab \"$WORKSPACE/$lab\" claude"
-      [ "$first" = 1 ] && { echo "focus"; first=0; }
-    done
+    _emit_session "switchtail-all" "$LAYOUT" 0
   } > "$file"
 }
 
@@ -265,14 +304,12 @@ EOF
 # of that lab resumes — fleets are for fanning out fresh work, not per-pane resume.
 _emit_fleet_session() {  # $1=lab, $2=count(validated int >=1) -> session text on stdout
   local lab="$1" n="$2" path="$WORKSPACE/$1" LAB i; LAB="$(_display_name "$1")"
-  echo "# TRANSIENT fleet session (stail fleet $lab $n) — not written to disk."
-  echo "layout ${SWITCHTAIL_LAYOUT:-tall}"
-  echo "os_window_class switchtail-$lab"
-  echo "cd $path"
+  local -a E_DIR=() E_LAB=() E_KIND=() E_TITLE=()
   for (( i=1; i<=n; i++ )); do
-    echo "launch --title \"$LAB $i\" --var lab=$lab --var cockpit=claude stail cockpit $lab \"$path\" claude"
-    [ "$i" = 1 ] && echo "focus"
+    E_DIR+=("$path"); E_LAB+=("$lab"); E_KIND+=(claude); E_TITLE+=("$LAB $i")
   done
+  echo "# TRANSIENT fleet session (stail fleet $lab $n) — not written to disk."
+  _emit_session "switchtail-$lab" "${SWITCHTAIL_LAYOUT:-tall}" 0
 }
 
 # ---------- subcommand: generate ----------
@@ -482,29 +519,12 @@ _build_resolve() {  # "$@" = SPEC tokens; expects P_DIR/P_SLUG/P_KIND/P_TITLE/SL
 
 # Emit the multi-tab session (to stdout) from the resolved pane arrays + a window class.
 _emit_build_session() {  # $1=class ; reads P_DIR/P_SLUG/P_KIND/P_TITLE by dynamic scope
-  local cls="$1" layout tabmax i in_tab=0 first=1 kind cvar
+  local cls="$1" layout tabmax
   layout="${SWITCHTAIL_LAYOUT:-tall}"
   tabmax="${SWITCHTAIL_TAB_SIZE:-5}"; [[ "$tabmax" =~ ^[1-9][0-9]*$ ]] || tabmax=5
+  local -a E_DIR=("${P_DIR[@]}") E_LAB=("${P_SLUG[@]}") E_KIND=("${P_KIND[@]}") E_TITLE=("${P_TITLE[@]}")
   echo "# TRANSIENT build session (stail build) — not written to disk."
-  echo "os_window_class $cls"
-  for (( i=0; i<${#P_DIR[@]}; i++ )); do
-    if [ "$in_tab" -eq 0 ]; then
-      # start a tab: new_tab (except the very first tab is implicit), then per-tab cd + layout
-      if [ "$first" = 1 ]; then first=0; else echo "new_tab $(_display_name "${P_SLUG[$i]}")"; fi
-      echo "cd ${P_DIR[$i]}"
-      echo "layout $layout"
-    fi
-    # --var cockpit collapses cmd:<argv> to a space-free 'cmd' (the park kitten only needs to tell
-    # claude from non-claude); the FULL kind is passed quoted as stail cockpit's 3rd arg, so a
-    # cmd:git status pane runs the right command while the user_var stays a single clean token.
-    kind="${P_KIND[$i]}"
-    case "$kind" in cmd:*) cvar="cmd" ;; *) cvar="$kind" ;; esac
-    echo "launch --title \"${P_TITLE[$i]}\" --var lab=${P_SLUG[$i]} --var cockpit=$cvar stail cockpit ${P_SLUG[$i]} \"${P_DIR[$i]}\" \"$kind\""
-    [ "$in_tab" -eq 0 ] && echo "focus"   # first pane of each tab is its master/hot-seat
-    in_tab=$((in_tab+1))
-    [ "$in_tab" -ge "$tabmax" ] && in_tab=0
-  done
-  echo "focus_tab 0"
+  _emit_session "$cls" "$layout" "$tabmax"
 }
 
 cmd_build() {
