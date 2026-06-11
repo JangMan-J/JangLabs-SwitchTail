@@ -1,0 +1,18 @@
+{
+    "KPlugin": {
+        "Authors": [
+            {
+                "Name": "JangMan",
+                "Email": "entrodox@gmail.com"
+            }
+        ],
+        "Category": "System Information",
+        "Description": "Switch and monitor SwitchTail Claude cockpits. The panel heading shows the focused lab; the popup lists every lab with its running state and switches to one on click. Backed by the stail CLI (active / list --json / switch).",
+        "Icon": "utilities-terminal",
+        "Id": "org.switchtail.board",
+        "Name": "SwitchTail Board",
+        "Version": "1.0"
+    },
+    "X-Plasma-API-Minimum-Version": "6.0",
+    "KPackageStructure": "Plasma/Applet"
+}

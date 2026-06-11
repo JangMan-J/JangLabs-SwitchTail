@@ -1,0 +1,10 @@
+[Unit]
+Description=Generate SwitchTail kitty session files for the JangLabs labs
+Documentation=man:stail
+
+[Service]
+Type=oneshot
+ExecStart=%h/.local/bin/stail generate
+
+[Install]
+WantedBy=default.target

@@ -1,0 +1,618 @@
+#!/usr/bin/env bash
+# stail — SwitchTail cockpit umbrella CLI.
+#
+# Subcommands:
+#   generate            (re)generate kitty session files + .desktop launchers, one per lab.
+#   cockpit <lab> [dir] [kind]  per-pane launcher. kind = claude (default; park-aware resume)
+#                       | shell (a login $SHELL) | cmd:<argv> (an arbitrary command).
+#   fleet  <lab> [N]    launch ONE cockpit window for <lab> with N parallel claude panes.
+#   active  [--json]    print the focused cockpit's lab (the widget heading).
+#   list    [--json]    list every lab and whether its cockpit window is running.
+#   switch  <lab>       raise the lab's cockpit window if up, else launch its session.
+#
+# Consolidates the former switchtail-kitty-sessions (→ `stail generate`) and
+# switchtail-claude-cockpit (→ `stail cockpit`). The runtime namespace is intentionally
+# unchanged: window class stays switchtail-<lab> and the resume-state dir stays
+# switchtail — the verified contract the Plasma widget, the .desktop
+# StartupWMClass, and the park kitten all key on. active/list/switch introspect the
+# live windows via kdotool by that class (the Phase-0-verified handle; kitty exposes
+# no pid through KWin, so window-class search is the reliable signal, not pgrep).
+#
+# Tunables (env): SWITCHTAIL_DIR, SWITCHTAIL_INCLUDE_SHELL (1|0), SWITCHTAIL_LAYOUT (tall|fat|grid|...),
+#   SWITCHTAIL_FLEET_MAX (upper bound for `fleet`'s pane count; default 12),
+#   SWITCHTAIL_TAB_SIZE (panes per tab before `build` overflows to a new tab; default 5).
+set -uo pipefail
+
+# ---------- shared config ----------
+WORKSPACE="${SWITCHTAIL_DIR:-$HOME/JangLabs}"
+OUTDIR="$HOME/.config/kitty/sessions/labs"
+APPDIR="$HOME/.local/share/applications"
+STATE="${XDG_STATE_HOME:-$HOME/.local/state}/switchtail"
+EXT=".kitty-session"
+
+usage() {
+  cat >&2 <<'EOF'
+stail — SwitchTail cockpit CLI
+usage:
+  stail generate              regenerate kitty session + .desktop files (one per lab)
+  stail cockpit <lab> [dir] [kind]   per-pane launcher (kind: claude|shell|cmd:<argv>)
+  stail fleet   <lab> [N]     open one cockpit window for <lab> with N claude panes (default 1)
+  stail build   SPEC...       open one tabbed cockpit from a cart of selections (see below)
+  stail active  [--json]      print the focused cockpit's lab (empty if not on one)
+  stail list    [--json]      list every lab + whether its cockpit window is running
+  stail switch  <lab>         raise the lab's window if running, else launch its session
+
+  build SPEC: one or more of  lab=<name>[@<kind>][*N]  or  dir=<path>[@<kind>][*N]
+    N    = panes, 1..5 each.   kind = claude (default) | shell | cmd:<argv>.
+    e.g.  stail build lab=claude*3 lab=agent dir=/srv/work/app*2
+          stail build lab=claude*2 lab=claude@shell dir=/srv/app@cmd:lazygit
+    Panes pack 5-per-tab (overflow spills to new kitty tabs). Custom dirs get a
+    slugged class switchtail-<slug> (collision-suffixed). The window class is the single
+    selection's slug, or switchtail-multi for a mixed cart. shell/cmd panes never park.
+EOF
+  exit "${1:-2}"
+}
+
+# ---------- shared: discover labs (top-level non-dot dirs except build/ that have a .git) ----------
+# Lab names must fit [A-Za-z0-9._-]: the runtime contract encodes each name in a window
+# class (switchtail-<lab>), a kdotool --class regex, JSON, and shell args, and a name with a
+# space/quote/tab would corrupt all of those. Names outside the set are skipped with a
+# warning (the os_window_class contract can't represent them anyway). Reserved names are
+# skipped: `build/` (workspace invariant), `all` (aggregate runtime name -> class switchtail-all),
+# and `switchtail-all` (it would collide with the aggregate's on-disk session basename
+# switchtail-all.kitty-session, silently clobbering it).
+_discover_labs() {  # echo VALID lab names, one per line, sorted; skip+warn on unusable names
+  local d name labs=()
+  shopt -s nullglob
+  for d in "$WORKSPACE"/*/; do
+    name="$(basename "$d")"
+    case "$name" in build|all|switchtail-all) continue ;; esac
+    [ -e "${d}.git" ] || continue
+    if [[ ! "$name" =~ ^[A-Za-z0-9._-]+$ ]]; then
+      echo "stail: skipping lab '$name' — name has characters outside [A-Za-z0-9._-] the switchtail-<lab> window-class contract can't represent" >&2
+      continue
+    fi
+    labs+=("$name")
+  done
+  [ ${#labs[@]} -gt 0 ] && printf '%s\n' "${labs[@]}" | sort
+}
+
+# ---------- shared: build an anchored, regex-safe kdotool --class pattern for a lab ----------
+# kdotool --class is a REGEX. A literal '.'/'+' in a name would over-match or error, so we
+# anchor (^…$) for exact-match semantics and escape every non-[A-Za-z0-9_-] char. Used by
+# both _win_ids and cmd_switch (whose arg comes straight from the widget, not _discover_labs).
+_class_re() {  # $1=lab -> echo ^switchtail-<escaped-lab>$
+  local s="$1" out="" c i
+  for (( i=0; i<${#s}; i++ )); do
+    c="${s:i:1}"
+    case "$c" in [A-Za-z0-9_-]) out+="$c" ;; *) out+="\\$c" ;; esac
+  done
+  printf '^switchtail-%s$' "$out"
+}
+
+# ---------- shared: human display name for a lab/slug (PascalCase) ----------
+# The widget heading, the list, and every tab/pane title show this. Lab dirs are lowercase, so
+# a plain Titlecase (first letter up) is the fallback; a few names carry an INTERNAL capital that
+# can't be inferred from the lowercase dir (jangsjedi -> JangsJedi), so those are mapped explicitly.
+# The single source of truth — change a display name here, not at each call site.
+_display_name() {  # $1=lab/slug -> echo its PascalCase display name
+  case "$1" in
+    jangsjedi)  printf 'JangsJedi' ;;
+    jangsjyro)  printf 'JangsJyro' ;;
+    switchtail) printf 'SwitchTail' ;;   # SwitchTail develops itself as a lab (inner cap can't be inferred)
+    all)        printf 'All' ;;
+    *)          printf '%s' "${1^}" ;;   # first char up, rest unchanged (preserves any inner caps)
+  esac
+}
+
+# ---------- shared: window id(s) for a lab's cockpit (exact class match) ----------
+_win_ids() {  # $1=lab -> echo matching window id(s), one per line
+  kdotool search --class "$(_class_re "$1")" 2>/dev/null
+}
+
+# ---------- shared: slug an arbitrary dir path to a [A-Za-z0-9._-] class token ----------
+# A custom work dir has no lab name, so `build` derives one from the basename: lowercase-ish,
+# every char outside [A-Za-z0-9._-] collapsed to '-', leading/trailing '-' trimmed. Empty or
+# all-punctuation basenames fall back to 'dir'. The caller (_build_resolve) handles collisions
+# with real labs / earlier specs by appending -2, -3, … so each slug is unique within the cart.
+_slug_dir() {  # $1=path -> echo a class-safe slug
+  local b s
+  b="$(basename -- "$1")"
+  s="$(printf '%s' "$b" | tr -c 'A-Za-z0-9._-' '-' )"
+  s="${s##-}"; s="${s%%-}"          # trim a single leading/trailing dash
+  s="${s//--/-}"                    # collapse doubled dashes from the tr
+  [ -n "$s" ] || s="dir"
+  printf '%s' "$s"
+}
+
+# Labs with a live cockpit window, in ONE kdotool round-trip: the search chains
+# `getwindowclassname '%@'` (all matched windows) onto itself, so a poll is a single KWin
+# call — not one search + a classname round-trip per window (that residual N+1 still raced).
+# The aggregate cockpit is one window classed switchtail-all that runs a claude pane PER lab
+# inside it (panes-in-all semantics). KWin only sees the single 'all' class, so when 'all'
+# is up we union in the labs its session launches — else the widget reports every lab DOWN
+# while you are juggling them in the primary aggregate mode.
+_running_labs() {  # echo each running lab (incl. "all" + its panes), one per line
+  local cls saw_all=0
+  while IFS= read -r cls; do
+    case "$cls" in
+      switchtail-all) printf 'all\n'; saw_all=1 ;;
+      switchtail-?*)  printf '%s\n' "${cls#switchtail-}" ;;
+    esac
+  done < <(kdotool search --class 'switchtail-' getwindowclassname '%@' 2>/dev/null)
+  [ "$saw_all" = 1 ] && _aggregate_labs
+}
+
+_need_kdotool() {  # $1=subcommand name, for the error message
+  command -v kdotool >/dev/null 2>&1 || {
+    echo "stail $1: kdotool not found — install it (paru -S kdotool); needed for window introspection" >&2
+    exit 3
+  }
+}
+
+# Validate a lab name taken from argv (cockpit/switch). _discover_labs already gates generated
+# names, but these two subcommands receive the lab straight from the caller (a Plasma widget),
+# so they re-check before the name reaches a filesystem path ($STATE/$lab.resume, $OUTDIR/$lab)
+# — a stray '../..' or space must not traverse out or corrupt the path.
+_require_valid_lab() {  # $1=subcommand, $2=lab
+  [[ "$2" =~ ^[A-Za-z0-9._-]+$ ]] || {
+    echo "stail $1: invalid lab name '$2' (must match [A-Za-z0-9._-])" >&2; exit 2
+  }
+}
+
+# ---------- shared: the labs the aggregate 'all' cockpit launches as panes ----------
+# The aggregate is ONE window (class switchtail-all) running a claude pane per lab. These helpers
+# read that pane set from its session file so 'list' can report those labs running and 'switch'
+# can raise the aggregate instead of spawning a duplicate standalone window.
+_aggregate_labs() {  # echo each lab the switchtail-all session runs, one per line
+  [ -f "$OUTDIR/switchtail-all$EXT" ] || return 0
+  grep -oE -- '--var lab=[A-Za-z0-9._-]+' "$OUTDIR/switchtail-all$EXT" 2>/dev/null | cut -d= -f2
+}
+_lab_in_aggregate() {  # $1=lab -> 0 if it is one of the aggregate's panes
+  _aggregate_labs | grep -qxF -- "$1"
+}
+
+# ---------- shared: launch a GUI process fully detached from the caller ----------
+# stail switch is meant to be invoked BY the Plasma widget — often a transient `bash=`
+# applet action whose process subtree is torn down the instant it returns, reaping a
+# plain `setsid … &` child before it reparents. A systemd --user transient SERVICE is
+# spawned by the user manager, entirely outside the caller's tree (--scope/nohup/setsid
+# do NOT escape — they stay descendants). The service does not inherit the caller env, so
+# the GUI vars are passed explicitly. setsid is the non-systemd fallback.
+# See memory method-detach-gui-from-transient-terminal-systemd-run.
+_launch_detached() {  # "$@" = command to run detached
+  if command -v systemd-run >/dev/null 2>&1; then
+    local env_args=() v
+    for v in WAYLAND_DISPLAY DISPLAY XDG_RUNTIME_DIR; do
+      [ -n "${!v:-}" ] && env_args+=("--setenv=$v=${!v}")
+    done
+    systemd-run --user --quiet --collect "${env_args[@]}" -- "$@" 2>/dev/null && return 0
+  fi
+  setsid "$@" </dev/null >/dev/null 2>&1 &
+  disown 2>/dev/null || true
+}
+
+# ---------- generate helpers (read cmd_generate's locals via bash dynamic scope) ----------
+_gen_is_submodule() {  # 0 if $1 is a path in .gitmodules
+  git -C "$WORKSPACE" config --file "$WORKSPACE/.gitmodules" --get-regexp '^submodule\..*\.path$' 2>/dev/null \
+    | awk '{print $2}' | grep -qx "$1"
+}
+
+_gen_emit_lab() {
+  local lab="$1" path="$WORKSPACE/$1" file="$OUTDIR/$1$EXT" kind LAB
+  kind="$(_gen_is_submodule "$lab" && echo 'submodule' || echo 'unregistered git repo')"
+  LAB="$(_display_name "$lab")"
+  {
+    echo "$HDR"
+    echo "# Lab: $lab ($kind)"
+    echo "layout $LAYOUT"
+    echo "os_window_class switchtail-$lab"
+    echo "cd $path"
+    echo "launch --title \"$LAB\" --var lab=$lab --var cockpit=claude stail cockpit $lab \"$path\" claude"
+    echo "focus"
+    [ "$INCLUDE_SHELL" = "1" ] && echo "launch --title \"$LAB shell\" --var lab=$lab --var cockpit=shell stail cockpit $lab \"$path\" shell"
+  } > "$file"
+}
+
+_gen_emit_all() {
+  local file="$OUTDIR/switchtail-all$EXT" lab first=1 LAB
+  {
+    echo "$HDR"
+    echo "# Aggregate cockpit: one claude per active lab, master+stack (first lab = master)."
+    echo "layout $LAYOUT"
+    echo "os_window_class switchtail-all"
+    for lab in "${LABS[@]}"; do
+      LAB="$(_display_name "$lab")"
+      echo "cd $WORKSPACE/$lab"
+      echo "launch --title \"$LAB\" --var lab=$lab --var cockpit=claude stail cockpit $lab \"$WORKSPACE/$lab\" claude"
+      [ "$first" = 1 ] && { echo "focus"; first=0; }
+    done
+  } > "$file"
+}
+
+_gen_emit_desktop() {  # $1=lab ("" => aggregate)
+  local lab="$1" name file sess wmclass
+  if [ -z "$lab" ]; then
+    name="SwitchTail: all labs (claude cockpit)"; file="$APPDIR/switchtail-all.desktop"
+    sess="$OUTDIR/switchtail-all$EXT"; wmclass="switchtail-all"
+  else
+    name="SwitchTail: $lab (claude)"; file="$APPDIR/switchtail-$lab.desktop"
+    sess="$OUTDIR/$lab$EXT"; wmclass="switchtail-$lab"
+  fi
+  cat > "$file" <<EOF
+[Desktop Entry]
+Type=Application
+Name=$name
+Comment=Open the ${lab:-all-labs} kitty cockpit
+Icon=utilities-terminal
+Exec=kitty --session $sess
+StartupWMClass=$wmclass
+Categories=Development;Utility;
+Terminal=false
+EOF
+}
+
+# ---------- shared: emit a transient N-pane session for one lab (to stdout) ----------
+# `fleet` opens ONE OS window (class switchtail-<lab>) holding N claude panes on the same repo
+# — parallel agents on one lab, navigable by the numpad deck's positional nth_window. It is a
+# transient, on-the-fly session piped into `kitty --session -` (no on-disk file; the per-lab
+# .kitty-session files stay the canonical 1-master+shell layout and are untouched).
+#
+# Each pane carries the SAME --var lab/cockpit=claude tags a generated master pane does, so the
+# park kitten (which gates close on those vars) parks any fleet pane exactly like a normal one.
+# The first pane gets `focus` (master/hot-seat for the bounce-swap deck). Panes share the lab's
+# single .resume marker (one per lab by contract): parking any pane arms it, so the NEXT launch
+# of that lab resumes — fleets are for fanning out fresh work, not per-pane resume.
+_emit_fleet_session() {  # $1=lab, $2=count(validated int >=1) -> session text on stdout
+  local lab="$1" n="$2" path="$WORKSPACE/$1" LAB i; LAB="$(_display_name "$1")"
+  echo "# TRANSIENT fleet session (stail fleet $lab $n) — not written to disk."
+  echo "layout ${SWITCHTAIL_LAYOUT:-tall}"
+  echo "os_window_class switchtail-$lab"
+  echo "cd $path"
+  for (( i=1; i<=n; i++ )); do
+    echo "launch --title \"$LAB $i\" --var lab=$lab --var cockpit=claude stail cockpit $lab \"$path\" claude"
+    [ "$i" = 1 ] && echo "focus"
+  done
+}
+
+# ---------- subcommand: generate ----------
+cmd_generate() {
+  local INCLUDE_SHELL LAYOUT HDR
+  INCLUDE_SHELL="${SWITCHTAIL_INCLUDE_SHELL:-1}"   # 1 = add a side shell window per lab
+  LAYOUT="${SWITCHTAIL_LAYOUT:-tall}"              # tall = master left + stack right (16:10-friendly)
+  HDR="# AUTO-GENERATED by 'stail generate' — DO NOT EDIT (regenerated on submodule changes)."
+
+  if [ ! -d "$WORKSPACE/.git" ] && [ ! -f "$WORKSPACE/.git" ]; then
+    echo "stail generate: $WORKSPACE is not a git repo" >&2; return 1
+  fi
+  mkdir -p "$OUTDIR" "$APPDIR"
+  shopt -s nullglob   # for the prune globs below (discovery sets its own in a subshell)
+
+  local LABS=()
+  mapfile -t LABS < <(_discover_labs)
+
+  local lab
+  for lab in "${LABS[@]}"; do _gen_emit_lab "$lab"; _gen_emit_desktop "$lab"; done
+  _gen_emit_all
+  _gen_emit_desktop ""
+
+  # prune stale outputs for labs that no longer exist
+  local -A keep=(); for lab in "${LABS[@]}"; do keep[$lab]=1; done
+  local f b
+  for f in "$OUTDIR"/*"$EXT"; do
+    b="$(basename "$f" "$EXT")"; [ "$b" = "switchtail-all" ] && continue
+    [ -n "${keep[$b]:-}" ] || rm -f "$f"
+  done
+  for f in "$APPDIR"/switchtail-*.desktop; do
+    b="$(basename "$f" .desktop)"; b="${b#switchtail-}"; [ "$b" = "all" ] && continue
+    [ -n "${keep[$b]:-}" ] || rm -f "$f"
+  done
+  command -v update-desktop-database >/dev/null 2>&1 && update-desktop-database "$APPDIR" >/dev/null 2>&1 || true
+
+  printf "stail generate: %d lab(s) -> %s [%s]\n" "${#LABS[@]}" "$OUTDIR" "${LABS[*]}"
+}
+
+# ---------- subcommand: cockpit ----------
+# Per-pane launcher run by every session line. The third arg is the pane KIND (default
+# 'claude'), which decides what the pane execs:
+#   claude       — a claude agent (the default; park-aware resume, below). Tagged
+#                  --var cockpit=claude so the park kitten + numpad deck treat it as first-class.
+#   shell        — an interactive login shell ($SHELL) in the lab dir. Never parks/resumes.
+#   cmd:<argv>   — an arbitrary command, whitespace-split into argv (e.g. cmd:htop,
+#                  cmd:git status, cmd:lazygit). Run via `exec` in the lab dir; never parks.
+# The kind is ALSO the value the launch line passes as --var cockpit=<kind>, so the pane's
+# kitty user_var and the command it runs stay in lockstep — the park kitten only arms a resume
+# marker for cockpit==claude (it re-checks the var), so a shell/cmd pane is never auto-closed.
+#
+# Resume model (claude only): a session resumes ONLY if it was deliberately "parked"
+# (Ctrl+Shift+R inside a cockpit, handled by the cockpit_park kitten, which writes the .resume
+# marker). Any non-parked exit (/exit, close_window, window X, crash, reboot) starts FRESH. The
+# marker is one-shot. The previous transcript is never deleted — always reachable via
+# `claude --resume`.
+cmd_cockpit() {
+  local lab dir kind marker
+  lab="${1:?usage: stail cockpit <lab> [dir] [kind]}"
+  _require_valid_lab cockpit "$lab"
+  dir="${2:-$WORKSPACE/$lab}"
+  kind="${3:-claude}"
+  mkdir -p "$STATE"
+  cd "$dir" 2>/dev/null || { echo "stail cockpit: dir '$dir' not found — aborting (refusing to root the pane in \$HOME)" >&2; exit 1; }
+  case "$kind" in
+    claude)
+      marker="$STATE/$lab.resume"
+      if [ -f "$marker" ]; then
+        rm -f "$marker"
+        exec claude --continue   # parked -> resume most recent session for this dir
+      fi
+      exec claude                # default -> fresh session
+      ;;
+    shell)
+      exec "${SHELL:-/bin/sh}" -l
+      ;;
+    cmd:*)
+      # cmd:<argv> — split the remainder on whitespace into an argv and exec it. This is a
+      # convenience pane (a TUI/REPL/one-shot beside the agents), NOT a security boundary: the
+      # spec comes from the user's own session/cart, so word-splitting (no quoting) is fine and
+      # keeps `cmd:git status` ergonomic. An empty command is an error, not a silent shell.
+      local rest=("${kind#cmd:}"); read -r -a rest <<< "${kind#cmd:}"
+      [ "${#rest[@]}" -gt 0 ] || { echo "stail cockpit: empty cmd: pane kind" >&2; exit 2; }
+      exec "${rest[@]}"
+      ;;
+    *)
+      echo "stail cockpit: unknown pane kind '$kind' (use claude | shell | cmd:<argv>)" >&2
+      exit 2
+      ;;
+  esac
+}
+
+# ---------- subcommand: fleet ----------
+# Open one cockpit window for <lab> with N parallel claude panes (default 1). N is clamped to
+# [1, SWITCHTAIL_FLEET_MAX] (default max 12) so a fat-fingered `fleet claude 400` can't fork-bomb
+# the box. The window is launched detached (same systemd-run path as `switch`) so invoking it
+# from the transient Plasma-widget applet context survives the caller being reaped. The session
+# is piped in via `kitty --session -` (STDIN) — no temp file to clean up or race.
+cmd_fleet() {
+  local lab="${1:?usage: stail fleet <lab> [N]}" n="${2:-1}" max
+  _require_valid_lab fleet "$lab"
+  max="${SWITCHTAIL_FLEET_MAX:-12}"
+  [[ "$max" =~ ^[1-9][0-9]*$ ]] || max=12
+  if [[ ! "$n" =~ ^[0-9]+$ ]]; then
+    echo "stail fleet: pane count '$n' is not a non-negative integer" >&2; exit 2
+  fi
+  if [ "$n" -lt 1 ]; then
+    echo "stail fleet: pane count must be >= 1 (got $n)" >&2; exit 2
+  fi
+  if [ "$n" -gt "$max" ]; then
+    echo "stail fleet: clamping pane count $n to SWITCHTAIL_FLEET_MAX=$max" >&2; n="$max"
+  fi
+  if [ ! -d "$WORKSPACE/$lab" ]; then
+    echo "stail fleet: lab dir '$WORKSPACE/$lab' not found — run 'stail generate'? (refusing to open a window of broken panes)" >&2
+    exit 1
+  fi
+  # A standalone window for this lab already up? It shares the class, so this opens a SECOND
+  # one (intended — a separate fleet) but `switch`/active would then raise/name arbitrarily
+  # among them; surface that rather than silently doubling.
+  if command -v kdotool >/dev/null 2>&1 && [ -n "$(_win_ids "$lab")" ]; then
+    echo "stail fleet: a '$lab' cockpit window is already up; opening a second (both share class switchtail-$lab)" >&2
+  fi
+  # The session is piped into `kitty --session -`, but the detach paths both sever the caller's
+  # stdin: `systemd-run --user` drops stdin unless --pipe (which re-attaches synchronously,
+  # defeating the detach) and the setsid fallback redirects </dev/null. So reconstruct the pipe
+  # INSIDE the detached process: pass the session text as an argv, and have a small bash -c rebuild
+  # it on the service's own stdin. No temp file to race/clean up.
+  local sess; sess="$(_emit_fleet_session "$lab" "$n")"
+  _launch_detached bash -c 'printf "%s\n" "$1" | kitty --session -' stail-fleet "$sess"
+}
+
+# ---------- subcommand: build ----------
+# Open ONE cockpit window from a cart of selections, packing panes 5-per-tab (overflowing to
+# new kitty tabs). The Plasma widget's primary launcher: the user checks several labs (each with
+# a per-row session count) and/or an arbitrary work dir, then hits "Open cockpit" -> this.
+#
+# SPEC tokens (one or more):  lab=<name>[@<kind>][*N]  |  dir=<path>[@<kind>][*N]
+#   N    = pane count, 1..TAB_SIZE each (trailing *<digits>).
+#   kind = the pane's command (trailing @<kind>): claude (default) | shell | cmd:<argv>.
+#          e.g. lab=claude*3  dir=/srv/app  lab=agent@shell  dir=/srv/app@cmd:lazygit
+# Resolution -> a flat ordered list of panes, each {dir, slug, kind, title}; slugs are de-duplicated
+# (a custom dir whose basename collides with a real lab or an earlier spec gets -2, -3, …). The
+# panes then pack SWITCHTAIL_TAB_SIZE (default 5) per tab. Window class = the single distinct slug,
+# or switchtail-multi when the cart mixes slugs. claude panes carry --var cockpit=claude (park + the
+# numpad deck treat them as first-class); shell/cmd panes carry their own kind and never park.
+# Launched detached via the same stdin-rebuild path as fleet.
+
+# A pane KIND is one of: claude | shell | cmd:<non-empty argv>. Used to peel a trailing @<kind>
+# off a spec value WITHOUT mis-eating an '@' that is part of a path (e.g. dir=/home/u@host/proj):
+# the suffix is only treated as a kind when it actually matches this set.
+_is_pane_kind() {  # $1=candidate -> 0 if it is a valid pane kind
+  case "$1" in claude|shell) return 0 ;; cmd:?*) return 0 ;; *) return 1 ;; esac
+}
+
+# Resolve SPECs -> four parallel arrays (P_DIR, P_SLUG, P_KIND, P_TITLE), one entry per pane, in
+# order. Sets the bash-dynamic-scope arrays the caller declared. Returns nonzero on a bad spec/dir.
+_build_resolve() {  # "$@" = SPEC tokens; expects P_DIR/P_SLUG/P_KIND/P_TITLE/SLUGSEEN declared by caller
+  local tok kind value count base dir slug uniq i tabmax pkind suffix
+  tabmax="${SWITCHTAIL_TAB_SIZE:-5}"; [[ "$tabmax" =~ ^[1-9][0-9]*$ ]] || tabmax=5
+  for tok in "$@"; do
+    # split a trailing *<digits> count off the end
+    count=1
+    if [[ "$tok" =~ \*([0-9]+)$ ]]; then
+      count="${BASH_REMATCH[1]}"; tok="${tok%\**}"
+    fi
+    kind="${tok%%=*}"; value="${tok#*=}"
+    [ "$kind" = "$tok" ] && { echo "stail build: malformed spec '$tok' (need lab=… or dir=…)" >&2; return 2; }
+    if [[ ! "$count" =~ ^[0-9]+$ ]] || [ "$count" -lt 1 ]; then
+      echo "stail build: spec '$tok' has bad count (need 1..$tabmax)" >&2; return 2
+    fi
+    [ "$count" -gt "$tabmax" ] && { echo "stail build: clamping '$value' count $count to $tabmax" >&2; count="$tabmax"; }
+    # peel a trailing @<kind> off the value — but only if the part after the LAST '@' is a real
+    # pane kind, so a path/name containing '@' is left intact (dir=/home/u@host -> no kind eaten).
+    pkind="claude"
+    if [[ "$value" == *@* ]]; then
+      suffix="${value##*@}"
+      if _is_pane_kind "$suffix"; then pkind="$suffix"; value="${value%@*}"; fi
+    fi
+    case "$kind" in
+      lab)
+        _require_valid_lab build "$value"
+        dir="$WORKSPACE/$value"; slug="$value"
+        [ -d "$dir" ] || { echo "stail build: lab dir '$dir' not found — run 'stail generate'?" >&2; return 1; }
+        ;;
+      dir)
+        # expand a leading ~ and resolve; must be an existing directory
+        case "$value" in "~"/*) value="$HOME/${value#\~/}" ;; "~") value="$HOME" ;; esac
+        [ -d "$value" ] || { echo "stail build: work dir '$value' not found" >&2; return 1; }
+        dir="$value"; slug="$(_slug_dir "$value")"
+        ;;
+      *) echo "stail build: unknown spec kind '$kind' (use lab= or dir=)" >&2; return 2 ;;
+    esac
+    # de-duplicate the slug within this cart (so two windows/classes never collide in one build)
+    uniq="$slug"; i=2
+    while [ -n "${SLUGSEEN[$uniq]:-}" ]; do uniq="${slug}-$i"; i=$((i+1)); done
+    SLUGSEEN[$uniq]=1
+    local disp; disp="$(_display_name "$uniq")"
+    # title: claude panes are just "Name N"; a shell/cmd pane labels its kind so the tab is legible
+    local ktag=""
+    case "$pkind" in shell) ktag=" sh" ;; cmd:*) ktag=" ${pkind#cmd:}" ;; esac
+    for (( i=1; i<=count; i++ )); do
+      P_DIR+=("$dir"); P_SLUG+=("$uniq"); P_KIND+=("$pkind"); P_TITLE+=("$disp$ktag $i")
+    done
+  done
+  [ "${#P_DIR[@]}" -gt 0 ]
+}
+
+# Emit the multi-tab session (to stdout) from the resolved pane arrays + a window class.
+_emit_build_session() {  # $1=class ; reads P_DIR/P_SLUG/P_KIND/P_TITLE by dynamic scope
+  local cls="$1" layout tabmax i in_tab=0 first=1 kind cvar
+  layout="${SWITCHTAIL_LAYOUT:-tall}"
+  tabmax="${SWITCHTAIL_TAB_SIZE:-5}"; [[ "$tabmax" =~ ^[1-9][0-9]*$ ]] || tabmax=5
+  echo "# TRANSIENT build session (stail build) — not written to disk."
+  echo "os_window_class $cls"
+  for (( i=0; i<${#P_DIR[@]}; i++ )); do
+    if [ "$in_tab" -eq 0 ]; then
+      # start a tab: new_tab (except the very first tab is implicit), then per-tab cd + layout
+      if [ "$first" = 1 ]; then first=0; else echo "new_tab $(_display_name "${P_SLUG[$i]}")"; fi
+      echo "cd ${P_DIR[$i]}"
+      echo "layout $layout"
+    fi
+    # --var cockpit collapses cmd:<argv> to a space-free 'cmd' (the park kitten only needs to tell
+    # claude from non-claude); the FULL kind is passed quoted as stail cockpit's 3rd arg, so a
+    # cmd:git status pane runs the right command while the user_var stays a single clean token.
+    kind="${P_KIND[$i]}"
+    case "$kind" in cmd:*) cvar="cmd" ;; *) cvar="$kind" ;; esac
+    echo "launch --title \"${P_TITLE[$i]}\" --var lab=${P_SLUG[$i]} --var cockpit=$cvar stail cockpit ${P_SLUG[$i]} \"${P_DIR[$i]}\" \"$kind\""
+    [ "$in_tab" -eq 0 ] && echo "focus"   # first pane of each tab is its master/hot-seat
+    in_tab=$((in_tab+1))
+    [ "$in_tab" -ge "$tabmax" ] && in_tab=0
+  done
+  echo "focus_tab 0"
+}
+
+cmd_build() {
+  [ "$#" -gt 0 ] || { echo "stail build: need at least one spec (lab=… or dir=…)" >&2; usage 2; }
+  local -a P_DIR=() P_SLUG=() P_KIND=() P_TITLE=()
+  local -A SLUGSEEN=()
+  _build_resolve "$@" || exit $?
+  # window class: the single distinct slug, else a generic multi marker
+  local cls distinct
+  distinct="$(printf '%s\n' "${P_SLUG[@]}" | sort -u | wc -l)"
+  if [ "$distinct" -eq 1 ]; then cls="switchtail-${P_SLUG[0]}"; else cls="switchtail-multi"; fi
+  local sess; sess="$(_emit_build_session "$cls")"
+  _launch_detached bash -c 'printf "%s\n" "$1" | kitty --session -' stail-build "$sess"
+}
+
+# ---------- subcommand: active ----------
+# Print the lab of the currently focused cockpit window (the widget heading). Empty +
+# exit 1 when the focused window is not a cockpit. Class switchtail-all -> lab "all".
+cmd_active() {
+  _need_kdotool active
+  local json=0 cls lab="" all=false
+  [ "${1:-}" = "--json" ] && json=1
+  cls="$(kdotool getactivewindow getwindowclassname 2>/dev/null)"
+  case "$cls" in
+    switchtail-all) lab=all; all=true ;;
+    switchtail-*)   lab="${cls#switchtail-}" ;;
+  esac
+  if [ "$json" = 1 ]; then
+    if [ -n "$lab" ]; then
+      printf '{"lab":"%s","display":"%s","all":%s}\n' "$lab" "$(_display_name "$lab")" "$all"
+    else
+      printf '{"lab":null,"display":null,"all":false}\n'
+    fi
+  else
+    [ -n "$lab" ] && printf '%s\n' "$lab"
+  fi
+  [ -n "$lab" ]   # exit 0 if on a cockpit, 1 otherwise
+}
+
+# ---------- subcommand: list ----------
+# Every lab + whether a cockpit window for it is currently up.
+cmd_list() {
+  _need_kdotool list
+  local json=0 lab first=1 running
+  [ "${1:-}" = "--json" ] && json=1
+  local labs=(); mapfile -t labs < <(_discover_labs)
+  local running_set; running_set="$(_running_labs)"   # one kdotool snapshot, matched locally
+  if [ "$json" = 1 ]; then
+    printf '['
+    for lab in "${labs[@]}"; do
+      printf '%s\n' "$running_set" | grep -qxF -- "$lab" && running=true || running=false
+      [ "$first" = 1 ] || printf ','
+      printf '{"lab":"%s","display":"%s","running":%s}' "$lab" "$(_display_name "$lab")" "$running"
+      first=0
+    done
+    printf ']\n'
+  else
+    for lab in "${labs[@]}"; do
+      if printf '%s\n' "$running_set" | grep -qxF -- "$lab"; then printf '%-14s running\n' "$lab"
+      else printf '%-14s -\n' "$lab"; fi
+    done
+  fi
+}
+
+# ---------- subcommand: switch ----------
+# Raise the lab's cockpit window if it's running; otherwise launch its session file.
+cmd_switch() {
+  _need_kdotool switch
+  local lab="${1:?usage: stail switch <lab>}" sess ids all_ids
+  _require_valid_lab switch "$lab"
+  if [ "$lab" = "all" ]; then sess="$OUTDIR/switchtail-all$EXT"; else sess="$OUTDIR/$lab$EXT"; fi
+  ids="$(_win_ids "$lab")"
+  if [ -n "$ids" ]; then
+    # Reuse the ids we already have — re-searching here raced the launch path (a window
+    # could vanish between the two searches) and picked arbitrarily among duplicates.
+    [ "$(printf '%s\n' "$ids" | grep -c .)" -gt 1 ] && \
+      echo "stail switch: multiple '$lab' cockpit windows up; raising the first" >&2
+    kdotool windowactivate "$(printf '%s\n' "$ids" | head -n1)" >/dev/null 2>&1
+    return 0
+  fi
+  # No standalone window for this lab. If it is live as a pane inside the aggregate 'all'
+  # cockpit, raise THAT window rather than spawning a duplicate session — 'list' reports such
+  # a lab running:true via the same union, so this keeps "running ⇒ switch raises" honest.
+  if [ "$lab" != "all" ] && _lab_in_aggregate "$lab"; then
+    all_ids="$(_win_ids all)"
+    if [ -n "$all_ids" ]; then
+      echo "stail switch: '$lab' runs as a pane in the aggregate 'all' cockpit; raising it" >&2
+      kdotool windowactivate "$(printf '%s\n' "$all_ids" | head -n1)" >/dev/null 2>&1
+      return 0
+    fi
+  fi
+  if [ ! -f "$sess" ]; then
+    echo "stail switch: no session for '$lab' ($sess) — run 'stail generate'?" >&2
+    return 1
+  fi
+  _launch_detached kitty --session "$sess"
+}
+
+# ---------- dispatch ----------
+sub="${1:-}"; [ $# -gt 0 ] && shift
+case "$sub" in
+  generate) cmd_generate "$@" ;;
+  cockpit)  cmd_cockpit "$@" ;;
+  fleet)    cmd_fleet "$@" ;;
+  build)    cmd_build "$@" ;;
+  active)   cmd_active "$@" ;;
+  list)     cmd_list "$@" ;;
+  switch)   cmd_switch "$@" ;;
+  ""|-h|--help|help) usage 0 ;;
+  *) echo "stail: unknown subcommand '$sub'" >&2; usage 2 ;;
+esac
