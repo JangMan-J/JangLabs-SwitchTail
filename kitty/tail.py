@@ -1,8 +1,8 @@
-# SwitchTail cockpit monitor — a kitty GLOBAL watcher (loaded via `watcher cockpit_monitor.py`
-# in kitty.conf). It is the persistent, in-kitty "cockpit monitor": it watches every window in
-# the kitty process and acts on the ones that belong to a SwitchTail cockpit (tagged --var cockpit=…).
+# SwitchTail tail watcher — a kitty GLOBAL watcher (loaded via `watcher tail.py`
+# in kitty.conf). It is the persistent, in-kitty "tail watcher": it watches every window in
+# the kitty process and acts on the ones that belong to a SwitchTail board (tagged --var kind=…).
 #
-# SLICE 1 (this file): when a SwitchTail claude pane finishes booting, auto-run the client-side slash
+# SLICE 1 (this file): when a SwitchTail claude line finishes booting, auto-run the client-side slash
 # commands `/rename` (Claude summarizes the session into a short title) and `/color` (Claude picks
 # an unused statusline color). These are CLIENT-side Claude Code commands — no `claude` CLI flag
 # fires them, so the only way to trigger them is to type them into the running TUI. A watcher can,
@@ -10,12 +10,12 @@
 # boss.call_remote_control() — so this needs NO `allow_remote_control` / `listen_on` socket and
 # opens no external attack surface.
 #
-# SAFETY (this watcher cost a real incident once — a stray window-close killed a live cockpit):
+# SAFETY (this watcher cost a real incident once — a stray window-close killed a live board):
 #   * It ONLY ever calls `send-text`. There is deliberately NO close/kill/quit path anywhere in
 #     this file, so it structurally cannot destroy a pane.
-#   * It acts ONLY on windows tagged `cockpit=claude` (SwitchTail agent panes). Shell panes (cockpit=
-#     shell), cmd panes (cockpit=cmd), and any non-stail kitty window are ignored.
-#   * It is idempotent: once it has styled a pane it sets the `cockpit_styled` user_var and never
+#   * It acts ONLY on windows tagged `kind=claude` (SwitchTail agent panes). Shell panes (kind=
+#     shell), cmd lines (kind=cmd), and any non-stail kitty window are ignored.
+#   * It is idempotent: once it has styled a pane it sets the `tail_styled` user_var and never
 #     touches that pane again — so a resume / re-attach / config-reload cannot re-fire it, and it
 #     never re-types into a pane where you may already be working.
 #
@@ -34,16 +34,16 @@ from kitty.boss import Boss
 from kitty.fast_data_types import add_timer
 from kitty.window import Window
 
-# The pane kinds (the --var cockpit=<kind> a SwitchTail pane carries) this slice styles. Only claude
+# The pane kinds (the --var kind=<kind> a SwitchTail pane carries) this slice styles. Only claude
 # panes get /rename + /color; shell/cmd panes are SwitchTail panes but are not claude sessions.
 _STYLE_KINDS = ("claude",)
 
 # Marker user_var set once a pane has been styled — the idempotency guard.
-_STYLED_VAR = "cockpit_styled"
+_STYLED_VAR = "tail_styled"
 
 # Marker set as soon as the delayed sends are scheduled, so repeated resizes before the first
 # send lands don't pile up duplicate timers.
-_SCHEDULED_VAR = "cockpit_scheduled"
+_SCHEDULED_VAR = "tail_scheduled"
 
 # When (seconds after load) to attempt the send, and how many times. A couple of spaced tries
 # absorb a slow claude boot; the first successful attempt marks the pane and the rest no-op.
@@ -54,13 +54,13 @@ _ATTEMPT_DELAYS = (1.2, 2.5, 4.5)
 _STARTUP_KEYS = "/rename\r/color\r"
 
 
-def _is_cockpit_claude(window: Window) -> bool:
+def _is_claude_line(window: Window) -> bool:
     """True iff this window is a stail claude agent pane we should style."""
     try:
         uv = window.user_vars or {}
     except Exception:
         return False
-    return uv.get("cockpit") in _STYLE_KINDS
+    return uv.get("kind") in _STYLE_KINDS
 
 
 def _already_styled(window: Window) -> bool:
@@ -109,10 +109,10 @@ def _scheduled(window: Window) -> bool:
 def on_resize(boss: Boss, window: Window, data: dict[str, Any]) -> None:
     # on_resize fires per-window for a global watcher, INCLUDING once at creation (kitty docs: the
     # creation resize has an all-zero old_geometry). We use it as the "window created" signal. Act
-    # only for a cockpit claude pane that is neither already styled nor already scheduled — the
+    # only for a board claude line that is neither already styled nor already scheduled — the
     # _SCHEDULED_VAR guard stops a later resize (drag, layout change) from piling up more timers
     # before the first send lands. (The send itself is also idempotent via _STYLED_VAR.)
-    if not _is_cockpit_claude(window) or _already_styled(window) or _scheduled(window):
+    if not _is_claude_line(window) or _already_styled(window) or _scheduled(window):
         return
     try:
         window.set_user_var(_SCHEDULED_VAR, "1")

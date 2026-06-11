@@ -1,4 +1,4 @@
-# SwitchTail cockpit: "bounce-swap".
+# SwitchTail board: "swap" (operator hot-seat swap).
 # Yank the focused agent into the hot seat (master / first window); press again, with
 # that same agent still in the hot seat, to fling it back where it came from. Built on
 # kitty's swap primitive: tab.move_window(delta) swaps the active window with the one
@@ -15,7 +15,7 @@ def main(args):
 
 
 def _log_exc():
-    # Best-effort debug log into the cockpit state dir (NOT world-writable /tmp, which is
+    # Best-effort debug log into the state dir (NOT world-writable /tmp, which is
     # symlink-attackable). Swallow any logging failure — a bad press must never raise.
     import os
     try:
@@ -24,7 +24,7 @@ def _log_exc():
             'switchtail')
         os.makedirs(state, exist_ok=True)
         import traceback
-        with open(os.path.join(state, 'bounce.log'), 'a') as f:
+        with open(os.path.join(state, 'swap.log'), 'a') as f:
             f.write(traceback.format_exc() + '\n')
     except Exception:
         pass
@@ -43,14 +43,14 @@ def handle_result(args, answer, target_window_id, boss):
         ai = wl.active_group_idx
         if ai < 0:
             return
-        store = getattr(boss, '_cockpit_bounce', None)
+        store = getattr(boss, '_switchtail_swap', None)
         if store is None:
             store = {}
-            boss._cockpit_bounce = store
+            boss._switchtail_swap = store
         # Housekeeping: drop records for tabs that no longer exist (a tab yanked-then-closed
         # without a master-press would otherwise linger for the kitty process lifetime). Its
         # own try/except — tab.id is stable+non-recycled so this is never a correctness fix,
-        # and a hiccup here must never break the actual bounce below.
+        # and a hiccup here must never break the actual swap below.
         try:
             live = {t.id for t in boss.all_tabs}
             for dead in [k for k in store if k not in live]:

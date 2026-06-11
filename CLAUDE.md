@@ -6,22 +6,25 @@
 
 SwitchTail: a one-handed agent switchboard for kitty terminal sessions (see
 `README.md`). Five surfaces — CLI (`bin/stail`), kitty kittens + confs
-(`kitty/`), a Plasma 6 widget (`plasmoid/org.switchtail.board`), systemd user
-units (`systemd/`), and the regression suite (`tests/`).
+(`kitty/`: hold, swap, tail watcher, keys), a Plasma 6 widget
+(`plasmoid/org.switchtail.board`), systemd user units (`systemd/`), and the
+regression suite (`tests/`). Vocabulary is retro telephony: board (a lab's
+window), line (one agent pane), trunk (N lines, one lab), patch (assemble a
+board), hold (close-for-resume), exchange (the all-labs board).
 
 ## The window-class contract (highest-risk invariant)
 
-Six points must stay in lockstep or switch/park/list silently degrade:
+Six points must stay in lockstep or switch/hold/list silently degrade:
 
-1. CLI emits class `switchtail-<lab>` (aggregate: `switchtail-all`).
+1. CLI emits class `switchtail-<lab>` (exchange: `switchtail-exchange`).
 2. Generated sessions set `os_window_class switchtail-<lab>`.
 3. Generated `.desktop` files set `StartupWMClass=switchtail-<lab>`.
-4. Kittens read the `--var cockpit=<kind>` / `--var lab=<lab>` user-vars the CLI passes.
+4. Kittens read the `--var kind=<kind>` / `--var lab=<lab>` user-vars the CLI passes.
 5. `kdotool` greps that class for running detection (`_running_labs` in `bin/stail`).
 6. The widget keys running state off the same class via `stail list --json`.
 
-A second 2-way contract: the park kitten writes
-`~/.local/state/switchtail/<lab>.resume`; `stail cockpit` reads it to decide
+A second 2-way contract: the hold kitten writes
+`~/.local/state/switchtail/<lab>.hold`; `stail line` reads it to decide
 fresh start vs `claude --continue`. Change the state-dir name in both places or
 not at all.
 

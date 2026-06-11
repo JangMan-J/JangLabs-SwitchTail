@@ -22,13 +22,13 @@ mkdir -p "$ws/good" && : > "$ws/good/.git"
 mkdir -p "$ws/dot.ok" && : > "$ws/dot.ok/.git"
 mkdir -p "$ws/bad name" && : > "$ws/bad name/.git"
 mkdir -p "$ws/build" && : > "$ws/build/.git"
-mkdir -p "$ws/all" && : > "$ws/all/.git"
+mkdir -p "$ws/exchange" && : > "$ws/exchange/.git"
 mkdir -p "$ws/notrepo"                       # no .git -> not a lab
 WORKSPACE="$ws"
 disc="$(_discover_labs 2>/tmp/stail-disc-warn)"; warn="$(cat /tmp/stail-disc-warn)"
 echo "  discovered: [$(echo "$disc" | tr '\n' ' ')]"
 echo "  warnings:   $warn"
-[ "$disc" = "$(printf 'dot.ok\ngood')" ] && ok "keeps good + dot.ok, drops 'bad name'/build/all/notrepo" || no "discovery set wrong: [$disc]"
+[ "$disc" = "$(printf 'dot.ok\ngood')" ] && ok "keeps good + dot.ok, drops 'bad name'/build/exchange/notrepo" || no "discovery set wrong: [$disc]"
 echo "$warn" | grep -q "skipping lab 'bad name'" && ok "warns on the space-containing name" || no "no warning for 'bad name'"
 
 echo "== 3. _class_re (#5): anchored + metachar-escaped =="
@@ -43,17 +43,17 @@ echo "== 3b. _display_name: PascalCase, explicit inner-cap overrides, Titlecase 
 [ "$(_display_name proton)"    = "Proton" ]    && ok "proton -> Proton" || no "proton: $(_display_name proton)"
 [ "$(_display_name jangsjedi)" = "JangsJedi" ] && ok "jangsjedi -> JangsJedi (explicit inner cap)" || no "jangsjedi: $(_display_name jangsjedi)"
 [ "$(_display_name jangsjyro)" = "JangsJyro" ] && ok "jangsjyro -> JangsJyro (explicit inner cap)" || no "jangsjyro: $(_display_name jangsjyro)"
-[ "$(_display_name all)"       = "All" ]       && ok "all -> All" || no "all: $(_display_name all)"
+[ "$(_display_name exchange)"  = "Exchange" ]  && ok "exchange -> Exchange" || no "exchange: $(_display_name exchange)"
 [ "$(_display_name my-app)"    = "My-app" ]    && ok "unknown -> Titlecase fallback" || no "fallback: $(_display_name my-app)"
 
-echo "== 4. aggregate-union parse (#2): pull labs from real switchtail-all session =="
-af="$HOME/.config/kitty/sessions/labs/switchtail-all.kitty-session"
+echo "== 4. aggregate-union parse (#2): pull labs from real switchtail-exchange session =="
+af="$HOME/.config/kitty/sessions/labs/switchtail-exchange.kitty-session"
 if [ -f "$af" ]; then
   labs="$(grep -oE -- '--var lab=[A-Za-z0-9._-]+' "$af" | cut -d= -f2 | tr '\n' ' ')"
   echo "  aggregate panes: $labs"
   echo "$labs" | grep -q 'agent' && echo "$labs" | grep -q 'proton' && ok "union parses each pane's lab" || no "union parse missing labs"
 else
-  no "no switchtail-all session file"
+  no "no switchtail-exchange session file"
 fi
 
 echo; echo "RESULT: $pass passed, $fail failed"

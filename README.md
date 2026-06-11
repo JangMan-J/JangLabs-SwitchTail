@@ -14,25 +14,30 @@ project.
 ## What it does
 
 SwitchTail coordinates kitty terminal layouts and Claude Code agent sessions
-across the labs of a multi-repo workspace (one cockpit window per lab). Five
+across the labs of a multi-repo workspace (one board window per lab). Five
 surfaces stay in lockstep:
 
 | Surface | Where | Role |
 |---|---|---|
-| `bin/stail` | CLI (`~/.local/bin/stail`) | Discover labs, generate kitty sessions + `.desktop` launchers, launch/raise/list cockpits (`generate` / `cockpit` / `fleet` / `build` / `active` / `list` / `switch`) |
-| `kitty/*.py` | kitty kittens + watcher | `cockpit_park` (close ⇒ resume marker), `cockpit_bounce` (shell/cmd panes), `cockpit_monitor` (auto `/rename` + `/color` on claude pane boot) |
-| `kitty/*.conf` | kitty config includes | Cockpit/deck keybindings and the monitor watcher hookup |
-| `plasmoid/org.switchtail.board` | Plasma 6 panel widget | List labs with running state, multi-select a cart, set per-row pane counts, open one tabbed cockpit |
+| `bin/stail` | CLI (`~/.local/bin/stail`) | Discover labs, generate kitty sessions + `.desktop` launchers, launch/raise/list boards (`generate` / `line` / `trunk` / `patch` / `active` / `list` / `switch`) |
+| `kitty/*.py` | kitty kittens + watcher | `hold` (close ⇒ hold marker for resume), `swap` (operator hot-seat swap), `tail` (auto `/rename` + `/color` on claude line boot) |
+| `kitty/*.conf` | kitty config includes | Hold/keys keybindings and the tail watcher hookup |
+| `plasmoid/org.switchtail.board` | Plasma 6 panel widget | List labs with running state, multi-select a cart, set per-row pane counts, patch one tabbed board |
 | `systemd/switchtail-sessions.*` | systemd user units | Watch `~/JangLabs/.gitmodules` / `.git/config`; regenerate sessions when labs change |
 
 ## Quick start
 
 ```bash
 stail list            # every lab + running state
-stail switch claude   # raise the claude cockpit (or launch it)
-stail fleet agent 3   # one window, 3 claude panes for the agent lab
-stail build lab=claude*2 lab=agent dir=/srv/work/app*2   # tabbed multi-lab cockpit
+stail switch claude   # raise the claude board (or launch it)
+stail trunk agent 3   # one window, 3 claude lines for the agent lab
+stail patch lab=claude*2 lab=agent dir=/srv/work/app*2   # patch a tabbed multi-lab board
 ```
+
+Vocabulary (retro telephony): a lab's window of agent panes is its **board**; one
+agent pane is a **line**; N parallel lines for one lab are a **trunk**; assembling a
+cart of lines into one board is **patch**ing; closing a line so it resumes next
+launch is **hold**ing it; the all-labs board is the **exchange**.
 
 The Plasma widget drives the same `stail` commands from the panel.
 
@@ -44,7 +49,7 @@ The Plasma widget drives the same `stail` commands from the panel.
   by real path, not through symlinks).
 - `systemd/` units are **copied** to `~/.config/systemd/user/` (enabling creates
   `.wants` symlinks; don't double-symlink).
-- State lives in `~/.local/state/switchtail/` (`<lab>.resume` markers).
+- State lives in `~/.local/state/switchtail/` (`<lab>.hold` markers).
 
 Anything that calls `stail` from a non-login environment (the Plasma widget,
 systemd units) must use the absolute path `~/.local/bin/stail` — GUI shells and
@@ -57,14 +62,14 @@ tests/run-all.sh
 ```
 
 Covers slug derivation, collision suffixing, tab packing, window-class rules,
-the park/resume contract, and monitor idempotency.
+the hold/resume contract, and tail-watcher idempotency.
 
 ## Environment
 
 | Variable | Default | Meaning |
 |---|---|---|
 | `SWITCHTAIL_DIR` | `~/JangLabs` | The labs workspace to scan |
-| `SWITCHTAIL_LAYOUT` | — | Cockpit tab layout override |
-| `SWITCHTAIL_INCLUDE_SHELL` | `0` | Offer a shell pane per cockpit |
-| `SWITCHTAIL_FLEET_MAX` | `12` | Max panes per fleet op |
-| `SWITCHTAIL_TAB_SIZE` | `5` | Panes packed per cockpit tab |
+| `SWITCHTAIL_LAYOUT` | — | Board tab layout override |
+| `SWITCHTAIL_INCLUDE_SHELL` | `1` | Offer a shell pane per board |
+| `SWITCHTAIL_TRUNK_MAX` | `12` | Max lines per trunk op |
+| `SWITCHTAIL_TAB_SIZE` | `5` | Panes packed per board tab |

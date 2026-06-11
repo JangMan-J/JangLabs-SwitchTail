@@ -7,7 +7,7 @@
             }
         ],
         "Category": "System Information",
-        "Description": "Switch and monitor SwitchTail Claude cockpits. The panel heading shows the focused lab; the popup lists every lab with its running state and switches to one on click. Backed by the stail CLI (active / list --json / switch).",
+        "Description": "Switch and monitor SwitchTail Claude boards. The panel heading shows the focused lab; the popup lists every lab with its running state and switches to one on click. Backed by the stail CLI (active / list --json / switch / patch).",
         "Icon": "utilities-terminal",
         "Id": "org.switchtail.board",
         "Name": "SwitchTail Board",

@@ -1,11 +1,11 @@
 /*
  * SwitchTail Board — a Plasma 6 panel widget over the `stail` CLI.
  *
- *   panel heading : `stail active --json`  -> the focused lab (or "SwitchTail" off-cockpit)
+ *   panel heading : `stail active --json`  -> the focused lab (or "SwitchTail" off-board)
  *   popup list    : `stail list --json`    -> every lab + running state
- *   build a cockpit: select labs / a custom dir, set a per-row session count, then
- *                    `stail build lab=…*N dir=…*N …` -> ONE window, panes packed 5-per-tab
- *   raise running  : `stail switch <lab>`  -> jump to an already-running cockpit
+ *   patch a board  : select labs / a custom dir, set a per-row session count, then
+ *                    `stail patch lab=…*N dir=…*N …` -> ONE window, panes packed 5-per-tab
+ *   raise running  : `stail switch <lab>`  -> jump to an already-running board
  *
  * Accessibility: the running/idle distinction is carried by TEXT ("running"/"idle") and
  * lightness/weight — never by red<->green — so it reads correctly on a daltonized/colour-
@@ -32,9 +32,9 @@ PlasmoidItem {
     readonly property int tabSize: Math.max(1, Plasmoid.configuration.tabSize || 5)
 
     // ---- live state ----
-    property string activeLab: ""      // focused lab key; "" when not on a cockpit
+    property string activeLab: ""      // focused lab key; "" when not on a board
     property string activeDisplay: ""  // its PascalCase display name (from `active --json`)
-    property bool activeAll: false     // focused window is the aggregate cockpit
+    property bool activeExchange: false  // focused window is the exchange (all-labs) board
     property bool ready: false         // a list result has come back at least once
 
     // The cart model: one entry per selectable row (a lab, or an added custom dir).
@@ -61,7 +61,7 @@ PlasmoidItem {
     toolTipMainText: i18n("SwitchTail Board")
     toolTipSubText: activeLab !== ""
         ? i18n("Focused: %1  ·  %2 running", activeDisplay, runningCount)
-        : i18n("Not on a cockpit  ·  %1 running", runningCount)
+        : i18n("Not on a board  ·  %1 running", runningCount)
 
     RunStail { id: stail }
 
@@ -142,11 +142,11 @@ PlasmoidItem {
                 var d = JSON.parse(r.stdout);
                 root.activeLab = d && d.lab ? String(d.lab) : "";
                 root.activeDisplay = d && d.display ? String(d.display) : "";
-                root.activeAll = !!(d && d.all);
+                root.activeExchange = !!(d && d.exchange);
             } catch (e) {
                 root.activeLab = "";
                 root.activeDisplay = "";
-                root.activeAll = false;
+                root.activeExchange = false;
             }
         });
     }
@@ -171,11 +171,11 @@ PlasmoidItem {
         });
     }
 
-    // Assemble `lab=…*N` / `dir=…*N` tokens for the selected rows and open one tabbed cockpit.
+    // Assemble `lab=…*N` / `dir=…*N` tokens for the selected rows and patch one tabbed board.
     // Lab names come from the CLI-validated list; the custom dir path is single-quoted so spaces
     // and shell metacharacters in it are inert; the count is clamped to [1, tabSize] per row. The
     // CLI re-validates + re-clamps everything regardless.
-    function buildCockpit() {
+    function patchBoard() {
         var toks = [];
         for (var i = 0; i < rows.length; ++i) {
             var r = rows[i];
@@ -188,7 +188,7 @@ PlasmoidItem {
             }
         }
         if (toks.length === 0) return;
-        stail.exec(stailCmd + " build " + toks.join(" "), function () {
+        stail.exec(stailCmd + " patch " + toks.join(" "), function () {
             settleTimer.restart();
         });
     }
@@ -226,7 +226,7 @@ PlasmoidItem {
         Accessible.role: Accessible.Button
         Accessible.name: root.activeLab !== ""
             ? i18n("SwitchTail Board, focused lab %1, %2 running", root.activeLab, root.runningCount)
-            : i18n("SwitchTail Board, not on a cockpit, %1 running", root.runningCount)
+            : i18n("SwitchTail Board, not on a board, %1 running", root.runningCount)
 
         RowLayout {
             id: compactRow
@@ -276,8 +276,8 @@ PlasmoidItem {
                     elide: Text.ElideRight
                 }
                 PlasmaComponents.Label {
-                    text: root.activeLab === "" ? i18n("Not on a cockpit")
-                        : root.activeAll ? i18n("Focused: %1 (aggregate)", root.activeDisplay)
+                    text: root.activeLab === "" ? i18n("Not on a board")
+                        : root.activeExchange ? i18n("Focused: %1 (exchange)", root.activeDisplay)
                         : i18n("Focused: %1", root.activeDisplay)
                     opacity: 0.7
                     font.pointSize: Kirigami.Theme.smallFont.pointSize
@@ -298,7 +298,7 @@ PlasmoidItem {
 
         PlasmaComponents.Label {
             Layout.fillWidth: true
-            text: i18n("Tick labs (or add a folder), set how many sessions each, then open one cockpit.")
+            text: i18n("Tick labs (or add a folder), set how many sessions each, then patch one board.")
             opacity: 0.7
             font.pointSize: Kirigami.Theme.smallFont.pointSize
             wrapMode: Text.WordWrap
@@ -375,7 +375,7 @@ PlasmoidItem {
                             opacity: 0.8
                             font.pointSize: Kirigami.Theme.smallFont.pointSize
                         }
-                        // raise an already-running lab cockpit directly (no need to build)
+                        // raise an already-running lab board directly (no need to patch)
                         PlasmaComponents.ToolButton {
                             visible: row.modelData.isLab && row.modelData.running
                             icon.name: "go-jump"
@@ -383,7 +383,7 @@ PlasmoidItem {
                             Layout.preferredHeight: Kirigami.Units.iconSizes.smallMedium
                             Layout.preferredWidth: Kirigami.Units.iconSizes.smallMedium
                             opacity: (hovered || row.hovered) ? 1.0 : 0.55
-                            text: i18n("Raise the running %1 cockpit", row.modelData.display)
+                            text: i18n("Raise the running %1 board", row.modelData.display)
                             Accessible.name: text
                             PlasmaComponents.ToolTip.text: text
                             PlasmaComponents.ToolTip.visible: hovered
@@ -469,7 +469,7 @@ PlasmoidItem {
 
         Kirigami.Separator { Layout.fillWidth: true }
 
-        // ---- launch the assembled cockpit ----
+        // ---- patch the assembled board ----
         PlasmaComponents.Button {
             Layout.fillWidth: true
             icon.name: "media-playback-start"
@@ -480,10 +480,10 @@ PlasmoidItem {
             readonly property string panePhrase: i18np("%1 pane", "%1 panes", root.selectedPanes)
             readonly property string tabPhrase: i18np("%1 tab", "%1 tabs", root.tabCount)
             text: root.selectedPanes > 0
-                ? i18n("Open cockpit — %1, %2", panePhrase, tabPhrase)
-                : i18n("Open cockpit — nothing selected")
+                ? i18n("Patch board — %1, %2", panePhrase, tabPhrase)
+                : i18n("Patch board — nothing selected")
             Accessible.name: text
-            onClicked: root.buildCockpit()
+            onClicked: root.patchBoard()
         }
     }
 }

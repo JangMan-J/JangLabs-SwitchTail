@@ -46,51 +46,51 @@ kdotool() {
   esac
 }
 
-echo "-- B1. running-set: standalone agent + aggregate all --"
-STUB_CLASSES=(switchtail-agent switchtail-all)
+echo "-- B1. running-set: standalone agent + exchange up --"
+STUB_CLASSES=(switchtail-agent switchtail-exchange)
 run="$(_running_labs | sort -u | tr '\n' ' ')"
 echo "  running set: $run"
-for l in agent all claude jangsjedi jangsjyro proton; do
+for l in agent exchange claude jangsjedi jangsjyro proton; do
   echo "$run" | grep -qw "$l" || { no "running set missing $l"; }; done
-echo "$run" | grep -qw proton && echo "$run" | grep -qw all && ok "all-union expands aggregate to every pane (#2)" || no "all-union failed"
+echo "$run" | grep -qw proton && echo "$run" | grep -qw exchange && ok "exchange-union expands aggregate to every pane (#2)" || no "exchange-union failed"
 
-echo "-- B2. list --json with 'all' up: every lab running, valid JSON --"
+echo "-- B2. list --json with exchange up: every lab running, valid JSON --"
 j="$(cmd_list --json)"; echo "  $j"
 jsonok "$j" && ok "list --json is valid JSON" || no "list --json invalid"
-echo "$j" | grep -q '"lab":"agent","display":"Agent","running":true' && ok "agent shows running under all" || no "agent not running under all"
+echo "$j" | grep -q '"lab":"agent","display":"Agent","running":true' && ok "agent shows running under exchange" || no "agent not running under exchange"
 
 echo "-- B3. list --json nothing up: all running=false --"
 STUB_CLASSES=()
 j="$(cmd_list --json)"; jsonok "$j" && ok "empty-state list --json valid" || no "empty list invalid"
 echo "$j" | grep -q '"running":true' && no "something shows running with no windows" || ok "all labs down when nothing up"
 
-echo "-- B4. list --json one standalone (claude), no all: only claude up --"
+echo "-- B4. list --json one standalone (claude), no exchange: only claude up --"
 STUB_CLASSES=(switchtail-claude)
 j="$(cmd_list --json)"
 echo "$j" | grep -q '"lab":"claude","display":"Claude","running":true' && ok "claude running" || no "claude not running"
 echo "$j" | grep -q '"lab":"proton","display":"Proton","running":false' && ok "proton correctly down (no false all-union)" || no "proton wrongly running"
 
-echo "-- B5. active --json on a cockpit + off it --"
+echo "-- B5. active --json on a board + off it --"
 STUB_ACTIVE="switchtail-jangsjyro"
 j="$(cmd_active --json)"; rc=$?
 echo "  $j (exit $rc)"
-jsonok "$j" && [ "$rc" -eq 0 ] && echo "$j" | grep -q '"lab":"jangsjyro"' && ok "active --json on cockpit, exit 0" || no "active on cockpit wrong"
-STUB_ACTIVE="switchtail-all"
-[ "$(cmd_active)" = all ] && ok "active text prints 'all' for aggregate" || no "active all wrong"
+jsonok "$j" && [ "$rc" -eq 0 ] && echo "$j" | grep -q '"lab":"jangsjyro"' && ok "active --json on board, exit 0" || no "active on board wrong"
+STUB_ACTIVE="switchtail-exchange"
+[ "$(cmd_active)" = exchange ] && ok "active text prints 'exchange' for aggregate" || no "active exchange wrong"
 STUB_ACTIVE="kitty"
 j="$(cmd_active --json)"; rc=$?
-jsonok "$j" && [ "$rc" -eq 1 ] && echo "$j" | grep -q '"lab":null' && ok "active --json off cockpit -> null + exit 1" || no "active off-cockpit wrong (exit $rc)"
+jsonok "$j" && [ "$rc" -eq 1 ] && echo "$j" | grep -q '"lab":null' && ok "active --json off board -> null + exit 1" || no "active off-board wrong (exit $rc)"
 
 echo "-- B6. switch id-reuse + duplicate warning (#9) --"
 STUB_IDS=('{id-one}' '{id-two}')
 warn="$(cmd_switch agent 2>&1 >/dev/null)"; act="$(cat /tmp/stail-activate.log)"
 echo "  activated: $act ; warn: $warn"
 [ "$act" = '{id-one}' ] && ok "raises the FIRST reused id (no re-search)" || no "activated wrong id: $act"
-echo "$warn" | grep -q 'multiple' && ok "warns on duplicate cockpits" || no "no duplicate warning"
+echo "$warn" | grep -q 'multiple' && ok "warns on duplicate boards" || no "no duplicate warning"
 : > /tmp/stail-activate.log
 STUB_IDS=('{only}')
 cmd_switch agent >/dev/null 2>&1; act="$(cat /tmp/stail-activate.log)"
-[ "$act" = '{only}' ] && ok "single cockpit raised by its id" || no "single raise wrong: $act"
+[ "$act" = '{only}' ] && ok "single board raised by its id" || no "single raise wrong: $act"
 
 echo; echo "RESULT: $pass passed, $fail failed"
 rm -f /tmp/stail-activate.log

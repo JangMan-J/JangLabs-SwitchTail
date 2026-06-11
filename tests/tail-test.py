@@ -1,11 +1,11 @@
 #!/usr/bin/env python3
-"""Unit tests for the cockpit monitor watcher (~/.config/kitty/cockpit_monitor.py), no kitty runtime.
+"""Unit tests for the tail watcher (~/.config/kitty/tail.py), no kitty runtime.
 
 We stub the `kitty.*` modules the watcher imports (boss, window, fast_data_types) — those resolve
 only inside kitty's embedded interpreter — then import the watcher unmodified and drive its
-callbacks with fake Boss/Window objects. We assert the JURISDICTION (only cockpit=claude panes get
+callbacks with fake Boss/Window objects. We assert the JURISDICTION (only kind=claude panes get
 styled), IDEMPOTENCY (a pane is never typed into twice), the exact SEND PAYLOAD (/rename + /color,
-each submitted), and — most important after the close-a-live-cockpit incident — that the watcher
+each submitted), and — most important after the close-a-live-board incident — that the watcher
 NEVER issues any window-close/kill remote-control verb.
 """
 import importlib.util
@@ -43,7 +43,7 @@ def load(modname, path):
     return mod
 
 
-mon = load('cockpit_monitor', '~/.config/kitty/cockpit_monitor.py')
+mon = load('tail_watcher', '~/.config/kitty/tail.py')
 
 PASS = {'n': 0, 'f': 0}
 
@@ -57,12 +57,12 @@ def check(cond, msg):
 class FakeWindow:
     _next = 1
 
-    def __init__(self, cockpit=None):
+    def __init__(self, kind=None):
         self.id = FakeWindow._next
         FakeWindow._next += 1
         self.user_vars = {}
-        if cockpit is not None:
-            self.user_vars['cockpit'] = cockpit
+        if kind is not None:
+            self.user_vars['kind'] = kind
 
     def set_user_var(self, k, v):
         self.user_vars[k] = v
@@ -90,12 +90,12 @@ def reset():
 
 
 # ============================================================================
-print("== 1. jurisdiction: only cockpit=claude panes get styled ==")
+print("== 1. jurisdiction: only kind=claude panes get styled ==")
 reset()
-claude = FakeWindow(cockpit='claude')
-shell = FakeWindow(cockpit='shell')
-cmd = FakeWindow(cockpit='cmd')
-plain = FakeWindow(cockpit=None)          # a non-stail kitty window
+claude = FakeWindow(kind='claude')
+shell = FakeWindow(kind='shell')
+cmd = FakeWindow(kind='cmd')
+plain = FakeWindow(kind=None)          # a non-stail kitty window
 boss = FakeBoss([claude, shell, cmd, plain])
 
 for w in (claude, shell, cmd, plain):
@@ -105,13 +105,13 @@ check(len(SCHEDULED) == 3, "claude pane scheduled timers (shell/cmd skip schedul
 fire_all_timers()
 styled_ids = {wid for (wid, _args) in boss.rc_calls}
 check(styled_ids == {claude.id}, "ONLY the claude pane received remote-control; got ids %s" % styled_ids)
-check(shell.user_vars.get('cockpit_styled') is None, "shell pane never marked styled")
-check(cmd.user_vars.get('cockpit_styled') is None, "cmd pane never marked styled")
-check(plain.user_vars.get('cockpit_styled') is None, "non-stail pane never marked styled")
+check(shell.user_vars.get('tail_styled') is None, "shell pane never marked styled")
+check(cmd.user_vars.get('tail_styled') is None, "cmd pane never marked styled")
+check(plain.user_vars.get('tail_styled') is None, "non-stail pane never marked styled")
 
 print("== 2. exact payload: /rename then /color, each submitted with \\r ==")
 reset()
-c = FakeWindow(cockpit='claude')
+c = FakeWindow(kind='claude')
 b = FakeBoss([c])
 mon.on_resize(b, c, {})
 fire_all_timers()
@@ -124,7 +124,7 @@ check(payload == '/rename\r/color\r', "payload is '/rename\\r/color\\r' (rename 
 
 print("== 3. idempotency: multiple resizes + all timers => typed exactly once ==")
 reset()
-c = FakeWindow(cockpit='claude')
+c = FakeWindow(kind='claude')
 b = FakeBoss([c])
 mon.on_resize(b, c, {})          # creation resize -> schedules 3 attempts
 mon.on_resize(b, c, {})          # a later resize (drag/layout) -> must NOT schedule more
@@ -132,7 +132,7 @@ mon.on_resize(b, c, {})
 check(len(SCHEDULED) == 3, "repeated resizes schedule timers only once (3 attempts total); got %d" % len(SCHEDULED))
 fire_all_timers()                # all 3 attempts fire; only the first should type
 check(len(b.rc_calls) == 1, "despite 3 attempts firing, typed EXACTLY once; got %d" % len(b.rc_calls))
-check(c.user_vars.get('cockpit_styled') == '1', "pane marked styled after firing")
+check(c.user_vars.get('tail_styled') == '1', "pane marked styled after firing")
 
 print("== 4. re-resize AFTER styling (resume / re-attach) never re-types ==")
 reset()
@@ -143,7 +143,7 @@ check(len(b.rc_calls) == 1, "still exactly one lifetime send (no re-type on resu
 
 print("== 5. pane closed before the timer fires => no send, no crash ==")
 reset()
-c2 = FakeWindow(cockpit='claude')
+c2 = FakeWindow(kind='claude')
 b2 = FakeBoss([c2])
 mon.on_resize(b2, c2, {})
 del b2.window_id_map[c2.id]       # pane gone before attempts fire
@@ -157,7 +157,7 @@ print("== 6. SAFETY: across MANY panes + all timers, every RC call is send-text 
 # would show up here as a non-send-text call.
 reset()
 FakeWindow._next = 1000
-panes = [FakeWindow(cockpit='claude') for _ in range(6)]
+panes = [FakeWindow(kind='claude') for _ in range(6)]
 bb = FakeBoss(panes)
 for w in panes:
     mon.on_resize(bb, w, {})
