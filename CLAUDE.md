@@ -19,7 +19,7 @@ Six points must stay in lockstep or switch/hold/list silently degrade:
 1. CLI emits class `switchtail-<lab>` (exchange: `switchtail-exchange`).
 2. Generated sessions set `os_window_class switchtail-<lab>`.
 3. Generated `.desktop` files set `StartupWMClass=switchtail-<lab>`.
-4. Kittens read the `--var kind=<kind>` / `--var lab=<lab>` user-vars the CLI passes.
+4. Kittens read the `--var lab=<lab>` identity var plus the table-derived `--var holdable=1` / `--var stylable=1` policy flags the CLI passes (never a kind literal).
 5. `kdotool` greps that class for running detection (`_running_labs` in `bin/stail`).
 6. The widget keys running state off the same class via `stail list --json`.
 

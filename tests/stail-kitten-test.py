@@ -142,12 +142,12 @@ def run_hold(state_home, wmap, target):
     hold.handle_result(None, None, target, b)
     return b
 
-# C1: tagged board claude line -> marker armed THEN close
+# C1: holdable-tagged line -> marker armed THEN close
 sh = tempfile.mkdtemp()
-b = run_hold(sh, {1: FakeWindow({'kind': 'claude', 'lab': 'zzt'})}, 1)
+b = run_hold(sh, {1: FakeWindow({'holdable': '1', 'lab': 'zzt'})}, 1)
 marker = os.path.join(sh, 'switchtail', 'zzt.hold')
-check(os.path.exists(marker), "tagged pane: hold marker written")
-check(b.closed == [1] and not b.errors, "tagged pane: window 1 closed, no error shown")
+check(os.path.exists(marker), "holdable pane: hold marker written")
+check(b.closed == [1] and not b.errors, "holdable pane: window 1 closed, no error shown")
 
 # C2: untagged pane -> never closed, visible warning
 b = run_hold(tempfile.mkdtemp(), {2: FakeWindow({})}, 2)
@@ -159,12 +159,12 @@ check(b.closed == [] and len(b.errors) == 1, "side shell: NOT closed, warning sh
 
 # C4: marker write FAILS (state path is a file) -> do NOT close, warn
 badfile = os.path.join(tempfile.mkdtemp(), 'statefile'); open(badfile, 'w').close()
-b = run_hold(badfile, {4: FakeWindow({'kind': 'claude', 'lab': 'zzt'})}, 4)
+b = run_hold(badfile, {4: FakeWindow({'holdable': '1', 'lab': 'zzt'})}, 4)
 check(b.closed == [] and len(b.errors) == 1, "marker write failure: pane left OPEN, warning shown")
 
 # C5 (R1): a traversal lab var is rejected before the marker path is built
 base = tempfile.mkdtemp(); deep = os.path.join(base, 'a', 'b'); os.makedirs(deep)
-b = run_hold(deep, {5: FakeWindow({'kind': 'claude', 'lab': '../../evil'})}, 5)
+b = run_hold(deep, {5: FakeWindow({'holdable': '1', 'lab': '../../evil'})}, 5)
 check(b.closed == [] and len(b.errors) == 1, "traversal lab: NOT closed, warning shown (R1)")
 evil = os.path.normpath(os.path.join(deep, 'switchtail', '../../evil.hold'))
 check(not os.path.exists(evil), "traversal lab: no marker written outside state dir (R1)")

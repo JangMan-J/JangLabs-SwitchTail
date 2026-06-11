@@ -54,7 +54,9 @@ s="$(emit_of switchtail-multi lab=claude*3 lab=agent*4)"
 printf '%s\n' "$s" | tail -1 | grep -qx 'focus_tab 0' && ok "ends with focus_tab 0" || no "missing focus_tab 0"
 printf '%s\n' "$s" | grep -q '^os_window_class switchtail-multi$' && ok "honors the passed window class" || no "class line wrong"
 # panes carry the hold tags + an explicit dir arg
-printf '%s\n' "$s" | grep -q -- '--var lab=claude --var kind=claude stail line claude ' && ok "panes carry hold tags + line <slug> <dir>" || no "pane launch shape wrong"
+printf '%s\n' "$s" | grep -q -- '--var lab=claude --var kind=claude --var holdable=1 --var stylable=1 stail line claude ' && ok "claude panes carry kind + table-derived holdable/stylable flags" || no "pane launch shape wrong"
+# shell/cmd panes must NOT carry the agent flags (the kind table says they are not holdable/stylable)
+printf '%s\n' "$s" | grep -- '--var kind=claude' | grep -qv 'holdable=1' && no "a claude pane missing flags" || ok "every claude pane is flagged holdable"
 
 echo "== 6. window-class rule (cmd_patch): single distinct slug vs mixed -> multi =="
 # stub the launcher and capture the os_window_class the build emits

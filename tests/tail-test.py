@@ -57,12 +57,14 @@ def check(cond, msg):
 class FakeWindow:
     _next = 1
 
-    def __init__(self, kind=None):
+    def __init__(self, kind=None, stylable=None):
         self.id = FakeWindow._next
         FakeWindow._next += 1
         self.user_vars = {}
         if kind is not None:
             self.user_vars['kind'] = kind
+        if stylable is not None:
+            self.user_vars['stylable'] = stylable
 
     def set_user_var(self, k, v):
         self.user_vars[k] = v
@@ -90,9 +92,9 @@ def reset():
 
 
 # ============================================================================
-print("== 1. jurisdiction: only kind=claude panes get styled ==")
+print("== 1. jurisdiction: only stylable=1 lines get styled ==")
 reset()
-claude = FakeWindow(kind='claude')
+claude = FakeWindow(kind='claude', stylable='1')
 shell = FakeWindow(kind='shell')
 cmd = FakeWindow(kind='cmd')
 plain = FakeWindow(kind=None)          # a non-stail kitty window
@@ -101,7 +103,7 @@ boss = FakeBoss([claude, shell, cmd, plain])
 for w in (claude, shell, cmd, plain):
     mon.on_resize(boss, w, {'old_geometry': None, 'new_geometry': None})
 
-check(len(SCHEDULED) == 3, "claude pane scheduled timers (shell/cmd skip scheduling); got %d" % len(SCHEDULED))
+check(len(SCHEDULED) == 3, "stylable pane scheduled timers (unflagged shell/cmd/plain skip); got %d" % len(SCHEDULED))
 fire_all_timers()
 styled_ids = {wid for (wid, _args) in boss.rc_calls}
 check(styled_ids == {claude.id}, "ONLY the claude pane received remote-control; got ids %s" % styled_ids)
@@ -111,7 +113,7 @@ check(plain.user_vars.get('tail_styled') is None, "non-stail pane never marked s
 
 print("== 2. exact payload: /rename then /color, each submitted with \\r ==")
 reset()
-c = FakeWindow(kind='claude')
+c = FakeWindow(kind='claude', stylable='1')
 b = FakeBoss([c])
 mon.on_resize(b, c, {})
 fire_all_timers()
@@ -124,7 +126,7 @@ check(payload == '/rename\r/color\r', "payload is '/rename\\r/color\\r' (rename 
 
 print("== 3. idempotency: multiple resizes + all timers => typed exactly once ==")
 reset()
-c = FakeWindow(kind='claude')
+c = FakeWindow(kind='claude', stylable='1')
 b = FakeBoss([c])
 mon.on_resize(b, c, {})          # creation resize -> schedules 3 attempts
 mon.on_resize(b, c, {})          # a later resize (drag/layout) -> must NOT schedule more
@@ -143,7 +145,7 @@ check(len(b.rc_calls) == 1, "still exactly one lifetime send (no re-type on resu
 
 print("== 5. pane closed before the timer fires => no send, no crash ==")
 reset()
-c2 = FakeWindow(kind='claude')
+c2 = FakeWindow(kind='claude', stylable='1')
 b2 = FakeBoss([c2])
 mon.on_resize(b2, c2, {})
 del b2.window_id_map[c2.id]       # pane gone before attempts fire
@@ -157,7 +159,7 @@ print("== 6. SAFETY: across MANY panes + all timers, every RC call is send-text 
 # would show up here as a non-send-text call.
 reset()
 FakeWindow._next = 1000
-panes = [FakeWindow(kind='claude') for _ in range(6)]
+panes = [FakeWindow(kind='claude', stylable='1') for _ in range(6)]
 bb = FakeBoss(panes)
 for w in panes:
     mon.on_resize(bb, w, {})

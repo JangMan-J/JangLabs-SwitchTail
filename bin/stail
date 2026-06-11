@@ -196,6 +196,23 @@ _launch_detached() {  # "$@" = command to run detached
   disown 2>/dev/null || true
 }
 
+# ---------- shared: the KIND TABLE — single source of per-kind agent policy ----------
+# Maps a pane kind to (fresh argv, continue argv, holdable, stylable). THE only place agent
+# policy lives: the launch lines derive --var holdable/stylable from this table, and the
+# hold/tail kittens gate on THOSE vars — never on a kind literal — so adding a new agent
+# kind is one row here, not coordinated edits across the bash/python boundary.
+#   fresh argv    — what a fresh pane execs.
+#   continue argv — what a held pane execs to resume. MUST be cwd-scoped (resume the most
+#                   recent session for the pane's directory): a globally-scoped continue
+#                   would cross-wire labs. Verify this property before adding any row.
+#   holdable      — the pane participates in the hold/resume marker protocol.
+#   stylable      — the tail watcher types the boot styling payload into it.
+# shell and cmd:<argv> kinds are handled structurally in cmd_line (not agent rows).
+_kind_fresh_argv()    { case "$1" in claude) printf 'claude' ;; esac; }
+_kind_continue_argv() { case "$1" in claude) printf 'claude --continue' ;; esac; }
+_kind_holdable()      { case "$1" in claude) return 0 ;; *) return 1 ;; esac; }
+_kind_stylable()      { case "$1" in claude) return 0 ;; *) return 1 ;; esac; }
+
 # ---------- shared: THE session emitter (single source of the kitty session grammar) ----------
 # Every session this tool produces — per-lab file, aggregate, transient trunk, transient patch —
 # flows through here, so the launch-line shape, the --var tags, and the packing rules live in
@@ -208,11 +225,12 @@ _launch_detached() {  # "$@" = command to run detached
 #   0  = single tab: layout once up top, cd whenever the pane dir changes, focus the first pane.
 #   >0 = pack N panes/tab: new_tab boundaries (named by the tab's first slug), per-tab cd+layout,
 #        focus per tab master, focus_tab 0 trailer.
-# Per pane: --var board collapses cmd:<argv> to a space-free 'cmd' (the hold kitten only needs
-# to tell claude from non-claude); the FULL kind is passed quoted as stail line's 3rd arg.
+# Per pane: --var kind collapses cmd:<argv> to a space-free 'cmd'; the FULL kind is passed
+# quoted as stail line's 3rd arg. --var holdable/stylable are derived from the kind table so
+# the kittens gate on stail-computed policy, never on a kind literal.
 _emit_session() {  # $1=class $2=layout $3=tabmax ; reads E_DIR/E_LAB/E_KIND/E_TITLE
   local cls="$1" layout="$2" tabmax="${3:-0}"
-  local i in_tab=0 first_tab=1 prev_dir="" kind cvar
+  local i in_tab=0 first_tab=1 prev_dir="" kind cvar flags
   if [ "$tabmax" -eq 0 ]; then
     echo "layout $layout"
   fi
@@ -227,7 +245,10 @@ _emit_session() {  # $1=class $2=layout $3=tabmax ; reads E_DIR/E_LAB/E_KIND/E_T
     fi
     kind="${E_KIND[$i]}"
     case "$kind" in cmd:*) cvar="cmd" ;; *) cvar="$kind" ;; esac
-    echo "launch --title \"${E_TITLE[$i]}\" --var lab=${E_LAB[$i]} --var kind=$cvar stail line ${E_LAB[$i]} \"${E_DIR[$i]}\" \"$kind\""
+    flags=""
+    _kind_holdable "$cvar" && flags+=" --var holdable=1"
+    _kind_stylable "$cvar" && flags+=" --var stylable=1"
+    echo "launch --title \"${E_TITLE[$i]}\" --var lab=${E_LAB[$i]} --var kind=$cvar$flags stail line ${E_LAB[$i]} \"${E_DIR[$i]}\" \"$kind\""
     if [ "$tabmax" -gt 0 ]; then
       [ "$in_tab" -eq 0 ] && echo "focus"
       in_tab=$((in_tab+1)); [ "$in_tab" -ge "$tabmax" ] && in_tab=0
@@ -356,37 +377,29 @@ cmd_generate() {
 # ---------- subcommand: line ----------
 # Per-pane launcher run by every session line. The third arg is the pane KIND (default
 # 'claude'), which decides what the pane execs:
-#   claude       — a claude agent (the default; hold-aware resume, below). Tagged
-#                  --var kind=claude so the hold kitten + numpad keys treat it as first-class.
+#   <agent>      — a kind-table row (today: claude). Hold-aware resume per the table's
+#                  holdable column; argv comes from the table, never hardcoded here.
 #   shell        — an interactive login shell ($SHELL) in the lab dir. Never holds/resumes.
 #   cmd:<argv>   — an arbitrary command, whitespace-split into argv (e.g. cmd:htop,
 #                  cmd:git status, cmd:lazygit). Run via `exec` in the lab dir; never holds.
-# The kind is ALSO the value the launch line passes as --var kind=<kind>, so the pane's
-# kitty user_var and the command it runs stay in lockstep — the hold kitten only arms a resume
-# marker for board==claude (it re-checks the var), so a shell/cmd pane is never auto-closed.
+# The launch line passes --var kind=<kind> plus the table-derived --var holdable/stylable
+# flags, so the pane's user_vars and the command it runs stay in lockstep — the hold kitten
+# arms a marker only for holdable=1 panes, so a shell/cmd pane is never auto-closed.
 #
-# Resume model (claude only): a session resumes ONLY if it was deliberately "held"
+# Resume model (holdable kinds only): a session resumes ONLY if it was deliberately "held"
 # (Ctrl+Shift+R inside a board, handled by the hold kitten (hold.py), which writes the .hold
 # marker). Any non-held exit (/exit, close_window, window X, crash, reboot) starts FRESH. The
 # marker is one-shot. The previous transcript is never deleted — always reachable via
 # `claude --resume`.
 cmd_line() {
-  local lab dir kind marker
+  local lab dir kind marker fresh
   lab="${1:?usage: stail line <lab> [dir] [kind]}"
-  _require_valid_lab board "$lab"
+  _require_valid_lab line "$lab"
   dir="${2:-$WORKSPACE/$lab}"
   kind="${3:-claude}"
   mkdir -p "$STATE"
   cd "$dir" 2>/dev/null || { echo "stail line: dir '$dir' not found — aborting (refusing to root the pane in \$HOME)" >&2; exit 1; }
   case "$kind" in
-    claude)
-      marker="$STATE/$lab.hold"
-      if [ -f "$marker" ]; then
-        rm -f "$marker"
-        exec claude --continue   # held -> resume most recent session for this dir
-      fi
-      exec claude                # default -> fresh session
-      ;;
     shell)
       exec "${SHELL:-/bin/sh}" -l
       ;;
@@ -400,8 +413,22 @@ cmd_line() {
       exec "${rest[@]}"
       ;;
     *)
-      echo "stail line: unknown pane kind '$kind' (use claude | shell | cmd:<argv>)" >&2
-      exit 2
+      # An agent kind — resolved through the kind table; unknown kinds are an error.
+      fresh="$(_kind_fresh_argv "$kind")"
+      if [ -z "$fresh" ]; then
+        echo "stail line: unknown pane kind '$kind' (use claude | shell | cmd:<argv>)" >&2
+        exit 2
+      fi
+      if _kind_holdable "$kind"; then
+        marker="$STATE/$lab.hold"
+        if [ -f "$marker" ]; then
+          rm -f "$marker"
+          local -a cont; read -r -a cont <<< "$(_kind_continue_argv "$kind")"
+          exec "${cont[@]}"        # held -> resume most recent session for this dir
+        fi
+      fi
+      local -a fr; read -r -a fr <<< "$fresh"
+      exec "${fr[@]}"              # no marker -> fresh session
       ;;
   esac
 }

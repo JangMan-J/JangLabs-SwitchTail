@@ -11,7 +11,7 @@ no(){ printf '  ✗ %s\n' "$1"; fail=$((fail+1)); }
 rm -f "$ST/zztest.hold"
 cat > /tmp/hold-test.session <<'EOF'
 os_window_class switchtail-zztest
-launch --title CLAUDE --var lab=zztest --var kind=claude sh
+launch --title CLAUDE --var lab=zztest --var kind=claude --var holdable=1 sh
 launch --title SHELL sh
 EOF
 setsid kitty -o allow_remote_control=yes --listen-on "$SOCK" -o confirm_os_window_close=0 \

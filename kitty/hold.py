@@ -1,5 +1,6 @@
 # SwitchTail board: "hold the focused claude line for resume".
-# Mapped to a key in hold.conf. For a properly tagged board claude line it writes a
+# Mapped to a key in hold.conf. For a hold-capable line (--var holdable=1, derived from
+# stail's kind table) it writes a
 # one-shot .hold marker for that lab (so `stail line <lab>` does `claude --continue` on
 # the next launch) and THEN closes the pane it acted on. The close is gated on the marker:
 # the kitten owns it (hold.conf no longer chains an unconditional close_window), so a
@@ -23,7 +24,7 @@ def handle_result(args, answer, target_window_id, boss):
     w = boss.window_id_map.get(target_window_id)
     uv = (getattr(w, 'user_vars', {}) or {}) if w else {}
     lab = uv.get('lab')
-    if uv.get('kind') == 'claude' and lab and _LAB_RE.fullmatch(lab):
+    if uv.get('holdable') == '1' and lab and _LAB_RE.fullmatch(lab):
         try:
             state = os.path.join(
                 os.environ.get('XDG_STATE_HOME', os.path.expanduser('~/.local/state')),
@@ -38,9 +39,9 @@ def handle_result(args, answer, target_window_id, boss):
         # Marker armed -> now (and only now) close the pane we acted on.
         boss.mark_window_for_close(target_window_id)
     else:
-        # Not a valid tagged board claude line (manual split, side shell, restored window,
+        # Not a hold-capable tagged line (manual split, side shell, restored window,
         # or an out-of-charset lab): never close it blindly. Make the no-op visible.
         boss.show_error(
             'stail hold',
-            'Not a valid board claude line (need --var kind=claude + a [A-Za-z0-9._-] lab) '
+            'Not a hold-capable line (need --var holdable=1 + a [A-Za-z0-9._-] lab) '
             '— nothing held or closed.')
