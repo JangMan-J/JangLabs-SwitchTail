@@ -201,17 +201,50 @@ _launch_detached() {  # "$@" = command to run detached
 # policy lives: the launch lines derive --var holdable/stylable from this table, and the
 # hold/tail kittens gate on THOSE vars — never on a kind literal — so adding a new agent
 # kind is one row here, not coordinated edits across the bash/python boundary.
-#   fresh argv    — what a fresh pane execs.
-#   continue argv — what a held pane execs to resume. MUST be cwd-scoped (resume the most
-#                   recent session for the pane's directory): a globally-scoped continue
-#                   would cross-wire labs. Verify this property before adding any row.
+#   fresh argv    — what a fresh pane execs; takes the pane's minted session id ($2) so a
+#                   later hold can resume THIS pane specifically.
+#   resume argv   — what a held pane execs to resume the exact session id ($2).
+#   continue argv — the id-less fallback (legacy flag marker / unknown sid). MUST be
+#                   cwd-scoped (resume the most recent session for the pane's directory):
+#                   a globally-scoped continue would cross-wire labs. Verify this property
+#                   before adding any row.
 #   holdable      — the pane participates in the hold/resume marker protocol.
 #   stylable      — the tail watcher types the boot styling payload into it.
 # shell and cmd:<argv> kinds are handled structurally in cmd_line (not agent rows).
-_kind_fresh_argv()    { case "$1" in claude) printf 'claude' ;; esac; }
+_kind_fresh_argv()    { case "$1" in claude) printf 'claude --session-id %s' "$2" ;; esac; }
+_kind_resume_argv()   { case "$1" in claude) printf 'claude --resume %s' "$2" ;; esac; }
 _kind_continue_argv() { case "$1" in claude) printf 'claude --continue' ;; esac; }
 _kind_holdable()      { case "$1" in claude) return 0 ;; *) return 1 ;; esac; }
 _kind_stylable()      { case "$1" in claude) return 0 ;; *) return 1 ;; esac; }
+
+# ---------- shared: per-pane hold markers + session-id plumbing ----------
+# A held pane is one EMPTY file $STATE/hold/<lab>/<session-id> — the filename IS the datum
+# (schema: session id only), written by the hold kitten from the pane's sid user_var. N held
+# panes for a lab = N files = N panes resume on the next trunk/board launch (the old single
+# <lab>.hold flag collapsed N holds into one resume). mv is the claim primitive: when N
+# panes boot concurrently, each rename succeeds for exactly one claimant — no double-consume
+# race. The legacy <lab>.hold flag is still consumed (via the id-less continue argv) so a
+# hold armed by an older kitten still resumes.
+_SID_RE='^[0-9a-fA-F-]{8,64}$'
+_new_sid() { uuidgen 2>/dev/null || cat /proc/sys/kernel/random/uuid; }
+_tag_sid() {  # $1=sid — stamp it on this pane's kitty window (OSC 1337 SetUserVar)
+  [ -t 1 ] && printf '\033]1337;SetUserVar=sid=%s\007' "$(printf %s "$1" | base64 -w0)"
+}
+_hold_claim() {  # $1=lab -> echo one claimed session id, if any (atomic, first-wins)
+  local d="$STATE/hold/$1" f sid
+  [ -d "$d" ] || return 0
+  for f in "$d"/*; do
+    [ -e "$f" ] || continue
+    sid="$(basename "$f")"
+    [[ "$sid" =~ $_SID_RE ]] || continue   # never let a stray filename reach an exec argv
+    if mv "$f" "$f.claimed.$$" 2>/dev/null; then
+      rm -f "$f.claimed.$$"
+      printf '%s\n' "$sid"
+      return 0
+    fi
+  done
+  return 0
+}
 
 # ---------- shared: THE session emitter (single source of the kitty session grammar) ----------
 # Every session this tool produces — per-lab file, aggregate, transient trunk, transient patch —
@@ -414,21 +447,33 @@ cmd_line() {
       ;;
     *)
       # An agent kind — resolved through the kind table; unknown kinds are an error.
-      fresh="$(_kind_fresh_argv "$kind")"
-      if [ -z "$fresh" ]; then
+      if [ -z "$(_kind_fresh_argv "$kind" probe)" ]; then
         echo "stail line: unknown pane kind '$kind' (use claude | shell | cmd:<argv>)" >&2
         exit 2
       fi
+      local sid
       if _kind_holdable "$kind"; then
+        # 1) per-pane sid marker: resume that exact session, and re-tag the pane with the
+        #    same sid so holding it again re-holds the same session.
+        sid="$(_hold_claim "$lab")"
+        if [ -n "$sid" ]; then
+          _tag_sid "$sid"
+          local -a cont; read -r -a cont <<< "$(_kind_resume_argv "$kind" "$sid")"
+          exec "${cont[@]}"
+        fi
+        # 2) legacy single-flag marker: id-less continue (most recent session for this dir).
         marker="$STATE/$lab.hold"
         if [ -f "$marker" ]; then
           rm -f "$marker"
           local -a cont; read -r -a cont <<< "$(_kind_continue_argv "$kind")"
-          exec "${cont[@]}"        # held -> resume most recent session for this dir
+          exec "${cont[@]}"
         fi
       fi
-      local -a fr; read -r -a fr <<< "$fresh"
-      exec "${fr[@]}"              # no marker -> fresh session
+      # fresh: mint a session id and stamp it on the pane so a later hold can target it.
+      sid="$(_new_sid)"
+      _tag_sid "$sid"
+      local -a fr; read -r -a fr <<< "$(_kind_fresh_argv "$kind" "$sid")"
+      exec "${fr[@]}"
       ;;
   esac
 }

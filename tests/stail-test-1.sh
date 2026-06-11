@@ -56,6 +56,27 @@ else
   no "no switchtail-exchange session file"
 fi
 
+echo "== 5. kind table: argv columns + policy flags =="
+[ "$(_kind_fresh_argv claude abc)" = "claude --session-id abc" ] && ok "fresh argv carries --session-id" || no "fresh: $(_kind_fresh_argv claude abc)"
+[ "$(_kind_resume_argv claude abc)" = "claude --resume abc" ] && ok "resume argv targets the sid" || no "resume: $(_kind_resume_argv claude abc)"
+[ "$(_kind_continue_argv claude)" = "claude --continue" ] && ok "continue argv is the id-less fallback" || no "continue: $(_kind_continue_argv claude)"
+[ -z "$(_kind_fresh_argv shell probe)" ] && ok "shell has no agent row (structural kind)" || no "shell wrongly in table"
+_kind_holdable claude && _kind_stylable claude && ok "claude is holdable + stylable" || no "claude flags wrong"
+_kind_holdable shell 2>/dev/null && no "shell wrongly holdable" || ok "shell not holdable"
+
+echo "== 6. _hold_claim: per-pane markers, atomic first-wins consume =="
+hcs=/tmp/stail-holdclaim; rm -rf "$hcs"; STATE="$hcs"
+mkdir -p "$hcs/hold/zlab"
+: > "$hcs/hold/zlab/11111111-2222-3333-4444-555555555555"
+: > "$hcs/hold/zlab/aaaaaaaa-bbbb-cccc-dddd-eeeeeeeeeeee"
+: > "$hcs/hold/zlab/not a sid;rm -rf"
+c1="$(_hold_claim zlab)"; c2="$(_hold_claim zlab)"; c3="$(_hold_claim zlab)"
+[ -n "$c1" ] && [ -n "$c2" ] && [ "$c1" != "$c2" ] && ok "two markers -> two distinct claims" || no "claims wrong: [$c1] [$c2]"
+[ -z "$c3" ] && ok "third claim finds nothing (each marker consumed once)" || no "over-claimed: [$c3]"
+case "$c1$c2" in *"not a sid"*) no "claimed a malformed marker name" ;; *) ok "malformed marker filename never claimed (charset gate)" ;; esac
+[ -z "$(_hold_claim nosuchlab)" ] && ok "no hold dir -> empty claim, no error" || no "phantom claim"
+rm -rf "$hcs"
+
 echo; echo "RESULT: $pass passed, $fail failed"
 rm -rf "$ws" /tmp/stail-disc-warn
 [ "$fail" -eq 0 ]

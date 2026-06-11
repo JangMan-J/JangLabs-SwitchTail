@@ -49,7 +49,7 @@ The Plasma widget drives the same `stail` commands from the panel.
   by real path, not through symlinks).
 - `systemd/` units are **copied** to `~/.config/systemd/user/` (enabling creates
   `.wants` symlinks; don't double-symlink).
-- State lives in `~/.local/state/switchtail/` (`<lab>.hold` markers).
+- State lives in `~/.local/state/switchtail/` — per-pane hold markers `hold/<lab>/<session-id>` (filename is the datum; legacy `<lab>.hold` flags still consumed).
 
 Anything that calls `stail` from a non-login environment (the Plasma widget,
 systemd units) must use the absolute path `~/.local/bin/stail` — GUI shells and

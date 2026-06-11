@@ -23,10 +23,13 @@ Six points must stay in lockstep or switch/hold/list silently degrade:
 5. `kdotool` greps that class for running detection (`_running_labs` in `bin/stail`).
 6. The widget keys running state off the same class via `stail list --json`.
 
-A second 2-way contract: the hold kitten writes
-`~/.local/state/switchtail/<lab>.hold`; `stail line` reads it to decide
-fresh start vs `claude --continue`. Change the state-dir name in both places or
-not at all.
+A second 2-way contract: `stail line` mints a session id per agent pane
+(`--session-id`, stamped on the window as the `sid` user-var via OSC 1337); the
+hold kitten writes a per-pane marker `~/.local/state/switchtail/hold/<lab>/<sid>`;
+`stail line` claims one atomically (mv = first-wins, no race between concurrently
+booting trunk panes) and resumes that exact session via `--resume <sid>`. Legacy
+`<lab>.hold` flags still consume via `--continue`. Change the state-dir layout in
+stail and hold.py together or not at all.
 
 ## Runtime placement rules
 

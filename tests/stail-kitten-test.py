@@ -142,12 +142,31 @@ def run_hold(state_home, wmap, target):
     hold.handle_result(None, None, target, b)
     return b
 
-# C1: holdable-tagged line -> marker armed THEN close
+# C1: holdable-tagged line WITHOUT sid -> legacy flag marker armed THEN close
 sh = tempfile.mkdtemp()
 b = run_hold(sh, {1: FakeWindow({'holdable': '1', 'lab': 'zzt'})}, 1)
 marker = os.path.join(sh, 'switchtail', 'zzt.hold')
-check(os.path.exists(marker), "holdable pane: hold marker written")
+check(os.path.exists(marker), "holdable pane (no sid): legacy hold marker written")
 check(b.closed == [1] and not b.errors, "holdable pane: window 1 closed, no error shown")
+
+# C1b: holdable line WITH a valid sid -> per-pane marker hold/<lab>/<sid>
+sh = tempfile.mkdtemp()
+SID = '11111111-2222-3333-4444-555555555555'
+b = run_hold(sh, {1: FakeWindow({'holdable': '1', 'lab': 'zzt', 'sid': SID})}, 1)
+check(os.path.exists(os.path.join(sh, 'switchtail', 'hold', 'zzt', SID)),
+      "sid pane: per-pane marker hold/zzt/<sid> written")
+check(not os.path.exists(os.path.join(sh, 'switchtail', 'zzt.hold')),
+      "sid pane: no legacy flag written")
+check(b.closed == [1] and not b.errors, "sid pane: closed, no error")
+
+# C1c: INVALID sid (traversal) -> falls back to the legacy flag, nothing escapes state dir
+sh = tempfile.mkdtemp()
+b = run_hold(sh, {1: FakeWindow({'holdable': '1', 'lab': 'zzt', 'sid': '../../evil'})}, 1)
+check(os.path.exists(os.path.join(sh, 'switchtail', 'zzt.hold')),
+      "bad sid: legacy flag fallback used")
+check(not os.path.exists(os.path.normpath(os.path.join(sh, 'switchtail', 'hold', 'zzt', '../../evil'))),
+      "bad sid: no marker outside the hold dir")
+check(b.closed == [1], "bad sid: pane still held+closed via the fallback")
 
 # C2: untagged pane -> never closed, visible warning
 b = run_hold(tempfile.mkdtemp(), {2: FakeWindow({})}, 2)
