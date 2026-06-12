@@ -3,8 +3,8 @@ gsd_state_version: 1.0
 milestone: v1.0
 milestone_name: milestone
 status: executing
-stopped_at: Completed 01-02-PLAN.md
-last_updated: "2026-06-12T08:47:46.699Z"
+stopped_at: Completed 01-03-PLAN.md
+last_updated: "2026-06-12T09:05:22.437Z"
 last_activity: 2026-06-12 -- Phase 01 execution started
 progress:
   total_phases: 6
@@ -28,7 +28,7 @@ See: .planning/PROJECT.md (updated 2026-06-11)
 ## Current Position
 
 Phase: 01 (Running-State Seam) — EXECUTING
-Plan: 3 of 5
+Plan: 4 of 5
 Status: Ready to execute
 Last activity: 2026-06-12 -- Phase 01 execution started
 
@@ -52,6 +52,7 @@ Progress: [░░░░░░░░░░] 0%
 
 | Phase 01 P01 | 13min | 2 tasks | 6 files |
 | Phase 01 P02 | 4min | 2 tasks | 3 files |
+| Phase 01 P03 | 8min | 3 tasks | 5 files |
 
 ### Decisions
 
@@ -64,6 +65,8 @@ Decisions are logged in PROJECT.md Key Decisions table. Recent decisions affecti
 - [Phase ?]: 01-01: pre-existing fixture drift (labs claude/jangsjedi renamed/removed 2026-06-11; 35 failing assertions) logged to deferred-items.md, not fixed — out of scope for the mechanical STAIL_BIN substitution
 - [Phase 01]: 01-02: state-test.py loads state.py repo-relative (dirname(__file__)/../kitty), never the deployed kitty config path — Pitfall-1 honesty applied to the python suite
 - [Phase 01]: 01-02: charset gate and compare-and-clear mutation-verified — removing either makes state-test.py fail
+- [Phase 01]: 01-03: run marker written once pre-dispatch in cmd_line with sid= empty — single call site covers claude/shell/cmd: kinds (OQ-3), minimizes code between cd guard and exec; sid is informational per the run-marker contract
+- [Phase 01]: 01-03: 4 pre-existing launch-line shape assertions (test-4 hold-tags adjacency, test-5 pane shape + shell/cmd line-end anchors) updated to the board-stamped shape — Rule 3, behavioral intent preserved and strengthened
 
 ### Pending Todos
 
@@ -86,6 +89,6 @@ None yet.
 
 **Branch model:** WIP on `versioning` (main = stable); per-phase branches enabled: `gsd/phase-{phase}-{slug}` (worktrees on).
 
-Last session: 2026-06-12T08:47:46.695Z
-Stopped at: Completed 01-02-PLAN.md
+Last session: 2026-06-12T09:05:22.433Z
+Stopped at: Completed 01-03-PLAN.md
 Resume file: None
