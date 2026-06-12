@@ -245,6 +245,37 @@ _hold_claim() {  # $1=lab -> echo one claimed session id, if any (atomic, first-
   return 0
 }
 
+# ---------- shared: per-pane RUN markers (running-state seam) ----------
+# A live pane is one file $STATE/run/<lab>/<pid>, written by `stail line` BEFORE its exec —
+# exec preserves the PID, so the filename IS the live agent process for the pane's whole
+# life. Content lines: start=<jiffies> (the process start time, overall field 22 of
+# /proc/<pid>/stat — the PID-reuse guard), board=<board> (the window the pane lives in),
+# kind=<kind>, sid=<sid-or-empty> (informational; may be empty). Readers treat a marker as
+# live iff /proc/<pid>/stat exists AND its start time matches the recorded one — a mismatch
+# means the PID was reused, i.e. the pane is dead — else they rm -f it (lazy reap; rm -f is
+# race-idempotent, so concurrent readers reaping the same marker is harmless). No locking:
+# the writer names the file with its own PID, so every file has exactly ONE writer by
+# construction, and writes go tmp + mv -f (the _hold_claim rename primitive) so a reader
+# never sees a half-written marker. EVERY write step tolerates failure: set -uo pipefail is
+# live, and a failed marker must degrade LISTING, never kill the pane — _run_mark returns 0
+# unconditionally.
+_run_mark() {  # $1=lab $2=board $3=kind $4=sid(may be empty) — NEVER fails the caller
+  local d="$STATE/run/$1" stat rest start
+  mkdir -p "$d" 2>/dev/null || return 0
+  stat="$(cat /proc/$$/stat 2>/dev/null)" || return 0
+  rest="${stat##*) }"                       # strip "pid (comm) " — comm may contain spaces
+  start="$(awk '{print $20}' <<<"$rest")"   # overall field 22 = field 20 after the strip
+  printf 'start=%s\nboard=%s\nkind=%s\nsid=%s\n' "$start" "$2" "$3" "${4:-}" \
+    > "$d/$$.tmp" 2>/dev/null && mv -f "$d/$$.tmp" "$d/$$" 2>/dev/null
+  return 0
+}
+_pane_alive() {  # $1=pid $2=recorded start -> 0 iff the same process is still alive
+  local stat rest
+  stat="$(cat "/proc/$1/stat" 2>/dev/null)" || return 1
+  rest="${stat##*) }"
+  [ "$(awk '{print $20}' <<<"$rest")" = "$2" ]
+}
+
 # ---------- shared: THE session emitter (single source of the kitty session grammar) ----------
 # Every session this tool produces — per-lab file, aggregate, transient trunk, transient patch —
 # flows through here, so the launch-line shape, the --var tags, and the packing rules live in
