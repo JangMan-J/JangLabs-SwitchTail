@@ -406,16 +406,22 @@ cmd_active() {
 
 All other claims are [VERIFIED] against the repo, the live deployment, the installed kitty 0.47.1 source, or [CITED] from official kitty docs.
 
-## Open Questions
+## Open Questions (RESOLVED)
+
+_All four questions were settled at plan time (2026-06-12, plan-phase orchestration; recommendations adopted as decided resolutions OQ-1..4 and handed to the planner)._
 
 1. **Does `stail active` move off kdotool in this phase (SEAM-01 says yes; ROADMAP success criteria don't mention it)?**
    - What we know: SEAM-01 explicitly names `active`; success criterion 2 says kdotool appears only in `stail switch`, which forbids `cmd_active`'s `getactivewindow` call.
    - What's unclear: whether the owner intended the lighter list-only reading the roadmap criteria suggest.
    - Recommendation: implement the watcher-based active (design above is complete and low-risk); it is required for the requirement as written and removes the widget's hot-path KWin dependency. If descoped, REQUIREMENTS.md must be amended — flag at plan checkpoint.
+   - **RESOLVED (OQ-1):** yes — `active` moves off kdotool this phase, per SEAM-01 as written (implemented in plans 01-02 and 01-04).
 2. **Exchange-union semantics: preserve the old file-grep over-report or adopt live accuracy?**
    - Recommendation: adopt live accuracy (Pitfall 6); record the decision in the updated contract comments.
+   - **RESOLVED (OQ-2):** live-marker accuracy adopted (encoded in plan 01-04 Task 1, including the inverse case).
 3. **Marker coverage for shell/cmd panes** — recommended yes (parity with class-based counting); a planner choosing agent-only markers changes user-visible running flags for shell-only boards.
+   - **RESOLVED (OQ-3):** yes — markers cover ALL pane kinds via the single pre-dispatch call site (plan 01-03 Task 2).
 4. **Test-harness `STAIL_BIN` parametrization** — recommended yes (Pitfall 1); strictly additive to the suite, default keeps today's behavior.
+   - **RESOLVED (OQ-4):** yes — lands as Wave-1/Wave-0 prerequisite (plan 01-01), depended on by 01-03.
 
 ## Environment Availability
 
