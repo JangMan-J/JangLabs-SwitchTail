@@ -1,0 +1,19 @@
+[workspace]
+resolver = "2"
+members = ["crates/switchtail-core", "crates/switchtail-plugin"]
+
+[workspace.package]
+version = "0.1.0"
+edition = "2021"
+license = "MIT"
+
+# Memory-friendly builds: this box runs many concurrent sessions; keep rustc's
+# footprint down (no debuginfo; parallelism is capped via CARGO_BUILD_JOBS=4 in
+# tools/dev.sh rather than here, so CI/other boxes aren't constrained).
+[profile.dev]
+debug = 0
+
+[profile.release]
+strip = true
+lto = true
+codegen-units = 1

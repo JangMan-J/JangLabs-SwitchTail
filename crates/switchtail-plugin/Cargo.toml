@@ -1,0 +1,8 @@
+[package]
+name = "switchtail"
+version = "0.1.0"
+edition = "2024"
+
+[dependencies]
+switchtail-core = { version = "0.1.0", path = "../switchtail-core" }
+zellij-tile = "0.44.3"

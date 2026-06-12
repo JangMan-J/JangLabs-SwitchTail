@@ -1,0 +1,11 @@
+# Rust
+/target/
+**/*.rs.bk
+
+# Local agent/session scratch (never tracked)
+.claude/
+.synapse/
+
+# Editors
+*.swp
+*~
