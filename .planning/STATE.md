@@ -49,6 +49,12 @@ CARGO_BUILD_JOBS=4, no agent fan-out, commit+push frequently)
   semantics still unconfirmed empirically — refine in a live-driving session.
 - This terminal was OOM-killed once mid-run; keep builds capped and avoid
   parallel heavy processes.
+- Release wasm builds (lto=true, codegen-units=1) SIGSEGV rustc on this box
+  under current load (two crashes, different crates — load-related, not
+  code). Deployed the debug wasm to ~/.local/share/zellij/plugins/ instead;
+  retry `tools/dev.sh install` on a quiet system. Keybind Alt+s is wired in
+  ~/.config/zellij/config.kdl; first launch will show zellij's one-time
+  permission approval prompt.
 
 ## Session Continuity
 
