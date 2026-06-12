@@ -1,8 +1,36 @@
 # Deferred items — Phase 01
 
-## Pre-existing test-fixture drift: renamed/removed labs (discovered during 01-01)
+## Pre-existing test-fixture drift: renamed/removed labs (discovered during 01-01) — RESOLVED
 
 **Found:** 2026-06-12, while recording the pre-edit baseline for plan 01-01.
+
+**RESOLVED:** 2026-06-12, standalone fixture-refresh task (commit `86164c9`).
+All 35 failures cleared by mechanical re-pointing: `claude` (as a lab) →
+`synapse`; `jangsjedi` → `jangsjyro` (test-4 §2 degenerate case) and →
+`switchtail` (the `_display_name` inner-cap test, with the dead `jangsjedi`
+override removed from `bin/stail` — the surviving `switchtail → SwitchTail`
+override exercises the same explicit-inner-cap path and was previously
+untested). `kind=claude` rows untouched — `claude` remains a valid agent KIND.
+No assertion weakened or deleted. Final suite counts (STAIL_BIN=checkout):
+
+| Suite | After |
+|---|---|
+| stail-test-1.sh | 25 passed, 0 failed |
+| stail-test-2.sh | 14 passed, 0 failed |
+| stail-test-3.sh | 15 passed, 0 failed |
+| stail-test-4.sh | 26 passed, 0 failed |
+| stail-test-5.sh | 39 passed, 0 failed |
+| stail-kitten-test.py | 27 passed, 0 failed |
+| tail-test.py | 18 passed, 0 failed |
+
+164 assertions, 0 failures — ALL SUITES PASSED. (test-2 reports 14 vs the
+old 13+3=16 because its B1 lab loop emits output only on failure; all 6
+union checks still run.) The suite-green gates for 01-03/01-04 are now
+attainable.
+
+---
+
+Original analysis follows.
 
 **What:** The regression suites hardcode the labs `claude` and `jangsjedi`, but the
 live workspace changed on 2026-06-11: the `claude` lab was renamed to `synapse`

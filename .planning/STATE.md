@@ -74,7 +74,7 @@ None yet.
 - Zellij plugin API details must come from per-phase research (workflow.research enabled) — do not trust roadmap-time assumptions
 - The no-widget desktop entry-point story (host terminal, launcher entries spawning boards, raise/focus semantics) must be settled by Phase 2 verdicts before Phases 5–6 depend on it
 - Watch for spine-language triggers T1–T5 firing mid-milestone (see intel/context.md); note, don't preempt
-- Test-fixture drift: suites hardcode labs claude/jangsjedi (renamed to synapse / removed 2026-06-11) — 35 pre-existing failures make every ALL-SUITES-PASSED gate unattainable until fixtures are re-pointed; resolve before 01-03/01-04 suite-green gates (see phases/01-running-state-seam/deferred-items.md)
+- ~~Test-fixture drift: suites hardcode labs claude/jangsjedi~~ RESOLVED 2026-06-12: fixtures re-pointed (claude→synapse as a lab; jangsjedi→jangsjyro/switchtail; kind=claude untouched), dead jangsjedi display-name override removed from bin/stail — full suite green (164 assertions, 0 failures); 01-03/01-04 suite-green gates are attainable (see phases/01-running-state-seam/deferred-items.md)
 
 ## Deferred Items
 
