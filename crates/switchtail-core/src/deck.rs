@@ -20,9 +20,8 @@ impl Deck {
             return Some(key);
         }
         for (i, key) in DECK_KEYS.iter().enumerate() {
-            let i = i as u8;
-            if !self.slots.contains_key(&i) {
-                self.slots.insert(i, line);
+            if let std::collections::btree_map::Entry::Vacant(slot) = self.slots.entry(i as u8) {
+                slot.insert(line);
                 return Some(*key);
             }
         }

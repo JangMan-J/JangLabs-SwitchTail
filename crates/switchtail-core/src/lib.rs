@@ -17,7 +17,7 @@ pub mod protocol;
 pub mod snapshot;
 pub mod view;
 
-pub use deck::{Deck, DECK_KEYS};
+pub use deck::{DECK_KEYS, Deck};
 pub use exchange::{Exchange, SortMode, View};
 pub use intent::HostIntent;
 pub use key::KeyInput;

@@ -115,4 +115,25 @@ keybinds {
 ```
 
 Plugin panics land in zellij's log dir
-(`/tmp/zellij-<uid>/zellij-log/zellij.log`).
+(`/tmp/zellij-<uid>/zellij-log/zellij.log`) — as does plugin `eprintln!`
+output (handy tracing channel).
+
+## Empirically verified facts (cost a debug loop each — trust these)
+
+- **CLI pipe replies route by pipe-ID, not name.** `PipeSource::Cli(pipe_id)`
+  carries a per-invocation UUID; `cli_pipe_output(pipe_id, …)` and
+  `unblock_cli_pipe_input(pipe_id)` must target that id. Passing the pipe
+  *name* silently drops the output (no error), and a never-unblocked CLI
+  pipe hangs the `zellij pipe` caller forever.
+- **First plugin load requires interactive permission approval**, which hangs
+  headless sessions. The grant cache is `<cache>/zellij/permissions.kdl`
+  (KDL: quoted-plugin-key node + permission-name children). The cache key for
+  `file:` plugins is the **bare absolute wasm path** (`RunPluginLocation::File`
+  Display). Headless/E2E runs pre-seed an isolated cache via
+  `XDG_CACHE_HOME` (see `tests/e2e.sh`).
+- **`dump-screen` (0.45) prints to the client's stdout** and takes
+  `-p/--pane-id`; it no longer takes a file path argument (0.44-era docs say
+  otherwise). A file argument fails with exit 2.
+- Headless boot works fine via `script -qec "stty cols 140 rows 40; zellij
+  --session <name>" /dev/null &`, then `zellij --session <name> action …`
+  from outside the pty.

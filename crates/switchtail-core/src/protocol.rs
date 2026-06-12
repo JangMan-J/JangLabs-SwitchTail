@@ -139,8 +139,10 @@ mod tests {
     fn malformed_payloads_error_without_panicking() {
         assert!(parse("not json").is_err());
         assert!(parse(r#"{"op":"unknown"}"#).is_err());
-        assert!(parse(r#"{"op":"say","line":"terminal_x","text":"hi"}"#)
-            .map(|op| matches!(op, PipeOp::Say { ref line, .. } if line.resolve().is_none()))
-            .unwrap_or(false));
+        assert!(
+            parse(r#"{"op":"say","line":"terminal_x","text":"hi"}"#)
+                .map(|op| matches!(op, PipeOp::Say { ref line, .. } if line.resolve().is_none()))
+                .unwrap_or(false)
+        );
     }
 }

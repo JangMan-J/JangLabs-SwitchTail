@@ -68,7 +68,9 @@ pub fn render(ex: &Exchange, rows: usize, cols: usize) -> Vec<String> {
 fn render_directory(ex: &Exchange, body_rows: usize, width: usize, out: &mut Vec<String>) {
     let lines = ex.sorted_lines();
     if lines.is_empty() {
-        out.push(format!("{DIM} no lines on the exchange — press n to open one{RESET}"));
+        out.push(format!(
+            "{DIM} no lines on the exchange — press n to open one{RESET}"
+        ));
         return;
     }
     for (i, l) in lines.iter().take(body_rows).enumerate() {
@@ -87,7 +89,11 @@ fn render_directory(ex: &Exchange, body_rows: usize, width: usize, out: &mut Vec
             _ => format!("{DIM}○{RESET}"),
         };
         let kind = l.kind.as_deref().unwrap_or("");
-        let focus = if l.focused { format!("{BLUE}▸{RESET}") } else { " ".into() };
+        let focus = if l.focused {
+            format!("{BLUE}▸{RESET}")
+        } else {
+            " ".into()
+        };
         let name = truncate(&l.display_name(), width.saturating_sub(30));
         let sel = if i == ex.selected { INVERT } else { "" };
         out.push(format!(
@@ -109,7 +115,10 @@ fn render_log(ex: &Exchange, body_rows: usize, width: usize, out: &mut Vec<Strin
             Triage::Answered => ("· ansd", BLUE),
             Triage::Parked => ("‥ park", DIM),
         };
-        let line = c.line.map(|l| format!("L{}", l.0)).unwrap_or_else(|| "—".into());
+        let line = c
+            .line
+            .map(|l| format!("L{}", l.0))
+            .unwrap_or_else(|| "—".into());
         let note = truncate(&c.note, width.saturating_sub(24));
         let sel = if i == ex.selected { INVERT } else { "" };
         out.push(format!(

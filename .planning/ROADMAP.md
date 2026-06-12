@@ -12,10 +12,10 @@ pure and every future capability a small follow-on. Facts in
 
 ## Phases
 
-- [ ] **Phase 1: Core Model** - switchtail-core: directory, deck assignment, seat, call log, triage, sorting, protocol types — pure + TDD
-- [ ] **Phase 2: Plugin Adapter** - events→core, intents→shim, ANSI render, deck/seat/say keys; wasm loads in zellij 0.45
-- [ ] **Phase 3: Pipes & Protocol** - switchtail pipe ops in/out, JSON list/log dumps, register/status metadata
-- [ ] **Phase 4: Operator Polish & E2E** - CB-safe attention surface, launch key, dev/install tooling, headless E2E smoke, review pass
+- [x] **Phase 1: Core Model** - switchtail-core: directory, deck assignment, seat, call log, triage, sorting, protocol types — pure + TDD
+- [x] **Phase 2: Plugin Adapter** - events→core, intents→shim, ANSI render, deck/seat/say keys; wasm loads in zellij 0.45
+- [x] **Phase 3: Pipes & Protocol** - switchtail pipe ops in/out, JSON list/log dumps, register/status metadata
+- [x] **Phase 4: Operator Polish & E2E** - CB-safe attention surface, launch key, dev/install tooling, headless E2E smoke, review pass
 
 ## Phase Details
 
@@ -52,7 +52,7 @@ pure and every future capability a small follow-on. Facts in
 
 | Phase | Status | Completed |
 |-------|--------|-----------|
-| 1. Core Model | Not started | - |
-| 2. Plugin Adapter | Not started | - |
-| 3. Pipes & Protocol | Not started | - |
-| 4. Operator Polish & E2E | Not started | - |
+| 1. Core Model | Complete | 2026-06-12 |
+| 2. Plugin Adapter | Complete | 2026-06-12 |
+| 3. Pipes & Protocol | Complete | 2026-06-12 |
+| 4. Operator Polish & E2E | Complete | 2026-06-12 |

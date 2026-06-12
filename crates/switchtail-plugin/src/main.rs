@@ -20,10 +20,7 @@ register_plugin!(State);
 impl ZellijPlugin for State {
     fn load(&mut self, configuration: BTreeMap<String, String>) {
         if let Some(cmd) = configuration.get("line_command") {
-            self.exchange.line_command = cmd
-                .split_whitespace()
-                .map(|s| s.to_string())
-                .collect();
+            self.exchange.line_command = cmd.split_whitespace().map(|s| s.to_string()).collect();
         }
         request_permission(&[
             PermissionType::ReadApplicationState,
@@ -37,6 +34,7 @@ impl ZellijPlugin for State {
             EventType::TabUpdate,
             EventType::Key,
             EventType::PermissionRequestResult,
+            EventType::CwdChanged,
         ]);
         set_selectable(true);
     }
@@ -69,6 +67,11 @@ impl ZellijPlugin for State {
                 }
                 None => false,
             },
+            Event::CwdChanged(PaneId::Terminal(id), cwd, _) => {
+                self.exchange
+                    .note_cwd_change(LineId(id), &cwd.to_string_lossy());
+                true
+            }
             Event::PermissionRequestResult(_) => true,
             _ => false,
         }
@@ -78,8 +81,12 @@ impl ZellijPlugin for State {
         if message.name != protocol::PIPE_NAME {
             return false;
         }
+        // CLI pipes are addressed by their per-invocation pipe id (the
+        // PipeSource::Cli payload), NOT by the pipe name — replies and
+        // unblocking must both target the id. (Verified empirically;
+        // name-routing silently drops the output.)
         let reply_pipe = match &message.source {
-            PipeSource::Cli(_) => Some(message.name.clone()),
+            PipeSource::Cli(pipe_id) => Some(pipe_id.clone()),
             _ => None,
         };
         let mut render = false;
@@ -90,9 +97,9 @@ impl ZellijPlugin for State {
                 render = true;
             }
         }
-        if let PipeSource::Cli(_) = &message.source {
+        if let PipeSource::Cli(pipe_id) = &message.source {
             // Single-shot CLI ops: never leave the caller's pipe blocked.
-            unblock_cli_pipe_input(&message.name);
+            unblock_cli_pipe_input(pipe_id);
         }
         render
     }
@@ -139,7 +146,8 @@ impl State {
                     if command.is_empty() {
                         open_terminal(cwd.unwrap_or_else(|| ".".into()));
                     } else {
-                        let mut cmd = CommandToRun::new_with_args(&command[0], command[1..].to_vec());
+                        let mut cmd =
+                            CommandToRun::new_with_args(&command[0], command[1..].to_vec());
                         cmd.cwd = cwd;
                         open_command_pane(cmd, BTreeMap::new());
                     }

@@ -158,8 +158,11 @@ impl Exchange {
             }
             // A closed line can't ring anymore; settle its calls.
             self.log.settle_line(id, Triage::Parked);
-            self.log
-                .place(Some(id), CallKind::LineClosed, format!("line {} closed", id.0));
+            self.log.place(
+                Some(id),
+                CallKind::LineClosed,
+                format!("line {} closed", id.0),
+            );
         }
         self.clamp_selection();
         self.refresh_ring_flags();
@@ -168,6 +171,17 @@ impl Exchange {
 
     pub fn ingest_boards(&mut self, boards: Vec<BoardSnapshot>) {
         self.boards = boards;
+    }
+
+    /// A line's working directory changed (host CwdChanged event).
+    pub fn note_cwd_change(&mut self, line: LineId, cwd: &str) {
+        if self.lines.contains_key(&line) {
+            self.log.place(
+                Some(line),
+                CallKind::CwdChanged,
+                format!("line {} cwd: {cwd}", line.0),
+            );
+        }
     }
 
     // ---------- operator keys (plugin UI → model) ----------
@@ -220,8 +234,11 @@ impl Exchange {
             KeyInput::Char('m') => {
                 if let Some(line) = self.selected_line() {
                     self.seat = Some(line);
-                    self.log
-                        .place(Some(line), CallKind::Info, format!("line {} is the seat", line.0));
+                    self.log.place(
+                        Some(line),
+                        CallKind::Info,
+                        format!("line {} is the seat", line.0),
+                    );
                 }
                 vec![]
             }
@@ -230,8 +247,11 @@ impl Exchange {
                     vec![HostIntent::SwapIntoSeat { seat, line }]
                 }
                 (None, _) => {
-                    self.log
-                        .place(None, CallKind::Info, "no seat marked — press m on a line first");
+                    self.log.place(
+                        None,
+                        CallKind::Info,
+                        "no seat marked — press m on a line first",
+                    );
                     vec![]
                 }
                 _ => vec![],
@@ -249,8 +269,11 @@ impl Exchange {
             KeyInput::Char('p') => self.settle_selected(Triage::Parked),
             KeyInput::Char('R') => {
                 if let Some(line) = self.selected_line() {
-                    self.log
-                        .place(Some(line), CallKind::Ring, format!("operator ring on line {}", line.0));
+                    self.log.place(
+                        Some(line),
+                        CallKind::Ring,
+                        format!("operator ring on line {}", line.0),
+                    );
                     self.refresh_ring_flags();
                     return self.attention_intents();
                 }
@@ -327,8 +350,11 @@ impl Exchange {
         let op = match protocol::parse(payload) {
             Ok(op) => op,
             Err(e) => {
-                self.log
-                    .place(None, CallKind::ProtocolError, format!("bad pipe payload: {e}"));
+                self.log.place(
+                    None,
+                    CallKind::ProtocolError,
+                    format!("bad pipe payload: {e}"),
+                );
                 return vec![];
             }
         };
@@ -420,7 +446,13 @@ impl Exchange {
     pub fn sorted_lines(&self) -> Vec<&Line> {
         let mut v: Vec<&Line> = self.lines.values().collect();
         match self.sort {
-            SortMode::Deck => v.sort_by_key(|l| (self.deck.key_for(l.id).is_none(), self.deck_rank(l.id), l.id)),
+            SortMode::Deck => v.sort_by_key(|l| {
+                (
+                    self.deck.key_for(l.id).is_none(),
+                    self.deck_rank(l.id),
+                    l.id,
+                )
+            }),
             SortMode::RingingFirst => v.sort_by_key(|l| (!l.ringing, self.deck_rank(l.id), l.id)),
             SortMode::Board => v.sort_by_key(|l| (l.board, l.id)),
         }
@@ -448,9 +480,12 @@ impl Exchange {
     /// Log view shows newest first; selection indexes that ordering.
     pub fn log_view_calls(&self) -> Vec<&crate::log::Call> {
         let mut v: Vec<&crate::log::Call> = self.log.calls().iter().collect();
-        v.reverse();
-        if self.sort == SortMode::RingingFirst {
-            v.sort_by_key(|c| c.triage != Triage::Ringing);
+        v.reverse(); // newest first
+        match self.sort {
+            SortMode::Deck => {}
+            SortMode::RingingFirst => v.sort_by_key(|c| c.triage != Triage::Ringing),
+            // By-line: group a line's calls together, newest line activity first.
+            SortMode::Board => v.sort_by_key(|c| c.line),
         }
         v
     }
@@ -500,8 +535,17 @@ impl Exchange {
         if now == self.lit {
             return vec![];
         }
-        let on: Vec<LineId> = now.iter().copied().filter(|id| !self.lit.contains(id)).collect();
-        let off: Vec<LineId> = self.lit.iter().copied().filter(|id| !now.contains(id)).collect();
+        let on: Vec<LineId> = now
+            .iter()
+            .copied()
+            .filter(|id| !self.lit.contains(id))
+            .collect();
+        let off: Vec<LineId> = self
+            .lit
+            .iter()
+            .copied()
+            .filter(|id| !now.contains(id))
+            .collect();
         let mut intents = Vec::new();
         for id in &on {
             intents.push(HostIntent::TintLine {
@@ -652,7 +696,10 @@ mod tests {
     #[test]
     fn status_and_register_attach_metadata() {
         let mut ex = exchange_with(vec![pane(4, "a")]);
-        ex.pipe_op(r#"{"op":"register","line":4,"label":"synapse","kind":"claude"}"#, None);
+        ex.pipe_op(
+            r#"{"op":"register","line":4,"label":"synapse","kind":"claude"}"#,
+            None,
+        );
         ex.pipe_op(r#"{"op":"status","line":4,"state":"blocked"}"#, None);
         let l = ex.lines().next().unwrap();
         assert_eq!(l.label.as_deref(), Some("synapse"));
@@ -680,7 +727,10 @@ mod tests {
     fn malformed_and_unknown_line_payloads_become_protocol_error_calls() {
         let mut ex = exchange_with(vec![pane(1, "a")]);
         assert!(ex.pipe_op("garbage", None).is_empty());
-        assert!(ex.pipe_op(r#"{"op":"say","line":99,"text":"x"}"#, None).is_empty());
+        assert!(
+            ex.pipe_op(r#"{"op":"say","line":99,"text":"x"}"#, None)
+                .is_empty()
+        );
         let kinds: Vec<_> = ex.log.calls().iter().map(|c| c.kind).collect();
         assert_eq!(
             kinds
@@ -702,6 +752,39 @@ mod tests {
         ex.key(KeyInput::Char('o'));
         assert_eq!(ex.sort, SortMode::Deck);
         assert_eq!(ex.sorted_lines()[0].id, LineId(1));
+    }
+
+    #[test]
+    fn cwd_change_lands_on_the_log_for_known_lines_only() {
+        let mut ex = exchange_with(vec![pane(1, "a")]);
+        ex.note_cwd_change(LineId(1), "/srv/work");
+        ex.note_cwd_change(LineId(99), "/elsewhere");
+        let cwd_calls: Vec<_> = ex
+            .log
+            .calls()
+            .iter()
+            .filter(|c| matches!(c.kind, CallKind::CwdChanged))
+            .collect();
+        assert_eq!(cwd_calls.len(), 1);
+        assert_eq!(cwd_calls[0].line, Some(LineId(1)));
+        assert!(cwd_calls[0].note.contains("/srv/work"));
+    }
+
+    #[test]
+    fn log_by_line_sort_groups_calls_per_line() {
+        let mut ex = exchange_with(vec![pane(1, "a"), pane(2, "b")]);
+        ex.pipe_op(r#"{"op":"ring","line":1}"#, None);
+        ex.pipe_op(r#"{"op":"ring","line":2}"#, None);
+        ex.pipe_op(r#"{"op":"ring","line":1}"#, None);
+        ex.key(KeyInput::Tab); // log view
+        ex.sort = SortMode::Board;
+        let lines: Vec<_> = ex.log_view_calls().iter().map(|c| c.line).collect();
+        let first_l2 = lines.iter().position(|l| *l == Some(LineId(2))).unwrap();
+        // every line-1 call comes before the first line-2 call (grouped)
+        assert!(
+            lines[..first_l2].iter().all(|l| *l == Some(LineId(1))),
+            "calls not grouped by line: {lines:?}"
+        );
     }
 
     #[test]

@@ -2,11 +2,11 @@
 gsd_state_version: 1.0
 milestone: v0.1
 milestone_name: Switchboard Groundwork
-status: executing
+status: milestone_complete
 last_updated: "2026-06-12"
 progress:
   total_phases: 4
-  completed_phases: 0
+  completed_phases: 4
 ---
 
 # Project State
@@ -21,8 +21,9 @@ See: .planning/PROJECT.md (created 2026-06-12, fresh-slate restart)
 
 ## Current Position
 
-Phase: 1 (Core Model)
-Status: starting
+Phase: 4 of 4 — ALL COMPLETE (2026-06-12, single autonomous session)
+Status: v0.1 Switchboard Groundwork delivered — 28 unit tests + no-kill
+guard green, wasm builds clean, headless E2E 8/8 strict, clippy clean.
 Mode: autonomous single-session (memory-constrained box — serial builds,
 CARGO_BUILD_JOBS=4, no agent fan-out, commit+push frequently)
 
@@ -43,12 +44,16 @@ CARGO_BUILD_JOBS=4, no agent fan-out, commit+push frequently)
 
 - Context7 monthly quota exhausted (2026-06-12) — `ctx7 login` for higher
   limits; using vendored source + upstream docs instead.
-- `replace_pane_with_existing_pane` swap semantics for the replaced pane need
-  empirical confirmation in Phase 2/4 E2E.
+- `replace_pane_with_existing_pane` swap: shipped with suppress=true (the
+  displaced pane stays alive & recoverable via focus). True positional swap
+  semantics still unconfirmed empirically — refine in a live-driving session.
 - This terminal was OOM-killed once mid-run; keep builds capped and avoid
   parallel heavy processes.
 
 ## Session Continuity
 
 Branch model: trunk-based on `main` (fresh project; no phase branches).
-Last session: 2026-06-12 — scaffold + research complete, Phase 1 starting.
+Last session: 2026-06-12 — v0.1 milestone complete. Next milestone
+candidates: lifecycle layer (trunks, boards-from-carts, agent-kind table),
+hold/resume markers, Claude Code hook wiring for ring/status, live-verified
+seat-swap semantics, in-plugin launcher/introspector.

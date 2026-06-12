@@ -139,7 +139,10 @@ mod tests {
             log.place(None, CallKind::Info, format!("call {i}"));
         }
         assert_eq!(log.calls().len(), LOG_CAP);
-        assert_eq!(log.calls().last().unwrap().note, format!("call {}", LOG_CAP + 39));
+        assert_eq!(
+            log.calls().last().unwrap().note,
+            format!("call {}", LOG_CAP + 39)
+        );
         assert_eq!(log.calls().first().unwrap().note, "call 40");
     }
 
