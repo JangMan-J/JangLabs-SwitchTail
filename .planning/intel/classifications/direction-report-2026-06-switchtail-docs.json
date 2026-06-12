@@ -1,0 +1,23 @@
+{
+  "source_path": "/home/jangmanj/JangLabs/switchtail/docs/direction-report-2026-06.md",
+  "type": "DOC",
+  "confidence": "medium",
+  "manifest_override": false,
+  "title": "SwitchTail direction report — modularization timing, coupling friction, language",
+  "summary": "Adversarially-verified assessment of SwitchTail's coupling depth, modularization timing (selective: cut agent seams now), and debiased spine-language ranking with trigger tables.",
+  "scope": [
+    "bin/stail bash spine",
+    "kitty kittens (cockpit_park.py, cockpit_monitor.py)",
+    "kind table / agent seam",
+    "per-pane session-ID resume markers",
+    "session-grammar emitters (cmd_generate, cmd_fleet, cmd_build)",
+    "kdotool/KWin running-state detection",
+    "Plasma 6 QML widget",
+    "mux migration options (tmux, WezTerm, Zellij)",
+    "spine language strategy (bash vs Python vs compiled)"
+  ],
+  "cross_refs": [],
+  "locked": false,
+  "precedence": null,
+  "notes": "Ambiguity resolved: contains decision-like verdicts ('timing verdict: SELECTIVE', a ranked language guidance) but no ADR markers (no Status field, no Decision/Consequences sections, no numbered filename) and verdicts are trigger-gated guidance rather than a single locked decision; classified DOC over ADR. Cross-refs are source-code paths only, no other planning docs referenced."
+}
