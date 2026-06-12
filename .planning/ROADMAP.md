@@ -2,7 +2,7 @@
 
 ## Overview
 
-This milestone replaces SwitchTail's kitty foundation with a Zellij WASM plugin (Rust/zellij-tile) while the kitty system stays the daily driver until parity. The arc follows the ingested migration prescription: first cut the running-state seam on the *current* system (decoupling from kitty's window-class stamping before, not during, the move), then prove Zellij can answer each of kitty's four fused roles, then rebuild capability by capability — lifecycle, hold/resume, the interaction layer (a paradigm rewrite, not a port) — and finally verify parity against the regression baseline and cut over the external surfaces (widget, systemd, launchers). No phase before Phase 6 may break the working kitty system; the `stail --json` contract is the frozen boundary every external surface keeps binding to. Zellij plugin API specifics are deliberately absent here — plan-phase research resolves them per phase against live docs.
+This milestone replaces SwitchTail's kitty foundation with a Zellij WASM plugin (Rust/zellij-tile) and retires the Plasma 6 widget — the plugin contains the entire system surface, absorbing the widget's launcher/introspector role as in-mux UI. The kitty system (widget included) stays the daily driver until parity. The arc follows the ingested migration prescription: first cut the running-state seam on the *current* system (decoupling from kitty's window-class stamping before, not during, the move), then prove Zellij can answer each of kitty's four fused roles — now including the no-widget desktop entry-point story — then rebuild capability by capability: lifecycle, hold/resume, the interaction layer (a paradigm rewrite, not a port, now carrying the launcher/introspector surface), and finally verify parity against the regression baseline and cut over: systemd and launchers swap, the plasmoid is uninstalled, kitty retires. No phase before Phase 6 may break the working kitty system. The `stail --json` contract survives for CLI/scripting/systemd consumers, but with the widget retired it is no longer a frozen GUI compatibility boundary. Zellij plugin API specifics are deliberately absent here — plan-phase research resolves them per phase against live docs.
 
 ## Phases
 
@@ -11,11 +11,11 @@ This milestone replaces SwitchTail's kitty foundation with a Zellij WASM plugin 
 - Decimal phases (2.1, 2.2): Urgent insertions (marked with INSERTED)
 
 - [ ] **Phase 1: Running-State Seam** - stail owns running state on the current kitty system; kdotool shrinks to raise/focus
-- [ ] **Phase 2: Zellij Plugin Feasibility** - PoC plugin proves all four kitty roles have Zellij-era answers; prior art assessed
+- [ ] **Phase 2: Zellij Plugin Feasibility** - PoC plugin proves all four kitty roles have Zellij-era answers, incl. the launcher/introspector role and no-widget entry points; prior art assessed
 - [ ] **Phase 3: Core Lifecycle on Zellij** - board/line/trunk/patch/exchange with per-pane identity, driven by the kind table
 - [ ] **Phase 4: Hold/Resume on Zellij** - per-pane session-ID marker protocol, atomic claim, fleet-safe park and resume
-- [ ] **Phase 5: Interaction Layer** - in-plugin watcher styling, attention surface, numpad deck, hot-seat swap, structural pane-safety
-- [ ] **Phase 6: Parity Cutover** - widget/systemd/launchers on the Zellij backend, suite green at baseline breadth, kitty retired
+- [ ] **Phase 5: Interaction Layer** - in-plugin watcher styling, attention surface, numpad deck, hot-seat swap, launcher/introspector UI, structural pane-safety
+- [ ] **Phase 6: Parity Cutover** - systemd/launchers on the Zellij backend, suite green at baseline breadth, plasmoid retired, kitty retired
 
 ## Phase Details
 
@@ -26,20 +26,20 @@ This milestone replaces SwitchTail's kitty foundation with a Zellij WASM plugin 
 **Success Criteria** (what must be TRUE):
   1. `stail list` and `stail list --json` report correct running state for every lab without consulting kdotool/KWin window-class search
   2. kdotool appears only on the raise/focus path (`stail switch`); removing it entirely would degrade raising, never listing
-  3. The Plasma widget shows correct running state with zero widget changes (it binds the unchanged `--json` contract)
+  3. The Plasma widget (still installed until Phase 6 cutover) shows correct running state with zero widget changes, confirming the `--json` contract held through the seam
   4. The kitty daily driver passes the full regression suite (147-assertion baseline plus new state-seam assertions)
 **Plans**: TBD
 
 ### Phase 2: Zellij Plugin Feasibility
-**Goal**: Confidence, backed by a running proof-of-concept, that Zellij can cover kitty's four fused roles — mux/session grammar, scriptable window model, watcher host, GUI host — with an architecture decision on what lives in the plugin vs in stail
+**Goal**: Confidence, backed by a running proof-of-concept, that Zellij can cover kitty's four fused roles — mux/session grammar, scriptable window model, watcher host, GUI host — plus the retired widget's launcher/introspector role, with an architecture decision on what lives in the plugin vs in stail
 **Depends on**: Phase 1
 **Requirements**: PLUG-01, PLUG-02, PLUG-03
 **Success Criteria** (what must be TRUE):
   1. A proof-of-concept SwitchTail plugin compiles to WASM, loads in Zellij, and reacts to pane lifecycle events while declaring only the permissions it needs
   2. The plugin demonstrates the watcher role's core primitive: renaming/recoloring a pane without typing into it
-  3. A written feasibility verdict exists for each of the four kitty roles, including the GUI-host answer (host terminal choice, window identity for raise/focus, launcher ownership)
-  4. Each prior-art plugin (zellij-attention, zellaude, sessionizers/zellij-switch, pane pickers/room) has a recorded build-on / reimplement / ignore verdict
-  5. The kitty daily driver is untouched by this phase
+  3. A written feasibility verdict exists for each of the four kitty roles, including the GUI-host answer (host terminal choice, window identity, launcher ownership) and how the plugin covers the launcher/introspector role
+  4. The desktop entry-point story without a widget is decided and recorded: how launcher entries spawn Zellij boards, and what raise/focus means with no widget driving it
+  5. Each prior-art plugin (zellij-attention, zellaude, sessionizers/zellij-switch, pane pickers/room) has a recorded build-on / reimplement / ignore verdict — and the kitty daily driver is untouched by this phase
 **Plans**: TBD
 
 ### Phase 3: Core Lifecycle on Zellij
@@ -66,29 +66,29 @@ This milestone replaces SwitchTail's kitty foundation with a Zellij WASM plugin 
 **Plans**: TBD
 
 ### Phase 5: Interaction Layer
-**Goal**: The kittens + deck.conf paradigm is rebuilt inside the plugin — auto-labeling, attention, one-handed deck, hot-seat swap — and the watcher becomes structurally unable to kill a pane
+**Goal**: The kittens + deck.conf paradigm is rebuilt inside the plugin — auto-labeling, attention, one-handed deck, hot-seat swap — plus the retired widget's launcher/introspector role as in-plugin UI, and the watcher becomes structurally unable to kill a pane
 **Depends on**: Phase 4
-**Requirements**: WATCH-01, WATCH-02, WATCH-03, DECK-01, DECK-02
+**Requirements**: WATCH-01, WATCH-02, WATCH-03, DECK-01, DECK-02, DECK-03
 **Success Criteria** (what must be TRUE):
   1. A freshly booted or resumed Claude line is auto-titled and colored per its kind, exactly once — no boot-timing keystrokes land as prompt input
-  2. The operator can focus any line on the active board one-handed via the numpad deck
-  3. The operator can hot-seat swap lines as on the kitty deck
+  2. The operator can focus any line one-handed via the numpad deck and hot-seat swap lines as on the kitty deck
+  3. From inside Zellij, the operator can browse labs with running state, assemble a cart with per-lab line counts, and patch a board — the widget's launcher/introspector role, in-plugin
   4. A line that needs operator attention is visibly surfaced on the board
   5. The plugin's declared permission set verifiably excludes pane destruction
 **Plans**: TBD
+**UI hint**: yes
 
 ### Phase 6: Parity Cutover
-**Goal**: Every external surface runs against the Zellij backend at verified parity, and Zellij becomes the daily driver
+**Goal**: Every surviving external surface runs against the Zellij backend at verified parity; Zellij becomes the daily driver, and both kitty and the Plasma 6 plasmoid are retired
 **Depends on**: Phase 5
 **Requirements**: CUT-01, CUT-02, CUT-03, CUT-04, CUT-05
 **Success Criteria** (what must be TRUE):
-  1. The Plasma widget, unmodified, lists labs with running state, builds a cart with per-row pane counts, and patches a tabbed board — all against the Zellij backend via `stail --json`
+  1. The plasmoid is removed from `~/.local/share/plasma/plasmoids/` and from the panel, and plasmashell restarts with a clean journal (no errors naming the applet)
   2. Adding or removing a lab in the workspace triggers the systemd units to regenerate Zellij board definitions
   3. Per-lab launcher entries open a lab's Zellij board, and `stail switch` raises an already-running board on Plasma/Wayland
   4. The regression suite runs green covering the ported behavior set, at breadth ≥ the 147-assertion kitty baseline
-  5. Zellij is the daily driver; kitty-specific surfaces are retired only after criterion 4 holds — at no earlier point was the kitty system broken
+  5. Zellij is the daily driver; kitty-specific surfaces and the plasmoid are retired only after criterion 4 holds — at no earlier point was the kitty system broken — and `stail --json` continues to serve its remaining CLI/scripting/systemd consumers
 **Plans**: TBD
-**UI hint**: yes
 
 ## Progress
 

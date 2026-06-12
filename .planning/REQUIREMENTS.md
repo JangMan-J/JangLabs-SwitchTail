@@ -7,6 +7,8 @@
 
 "v1" here = the current milestone (Zellij Foundation parity). The existing kitty system is the pre-GSD validated baseline, not this v1. Each requirement maps to a roadmap phase.
 
+Parity note (owner addendum, 2026-06-11): the Plasma 6 widget is NOT part of parity — its launcher/introspector role is satisfied by in-plugin equivalents (DECK-03), and the plasmoid itself is retired at cutover (CUT-01).
+
 ### Pre-Migration State Seam (SEAM)
 
 - [ ] **SEAM-01**: `stail list` / `stail active` / `stail list --json` report board running state from stail-owned state, not from kdotool/KWin window-class search
@@ -15,7 +17,7 @@
 ### Zellij Plugin Foundation (PLUG)
 
 - [ ] **PLUG-01**: A proof-of-concept SwitchTail plugin (Rust compiled to WASM) loads in Zellij, subscribes to pane lifecycle events, and renames/recolors a pane under explicitly declared minimal permissions
-- [ ] **PLUG-02**: Each of kitty's four fused roles — mux/session grammar, scriptable window model, in-process watcher host, GUI host (rendering, window identity for raise/focus, launcher ownership, beyond-PATH resolution) — has a validated, recorded Zellij-era answer
+- [ ] **PLUG-02**: Each of kitty's four fused roles — mux/session grammar, scriptable window model, in-process watcher host, GUI host (rendering, window identity for raise/focus, launcher ownership, beyond-PATH resolution) — has a validated, recorded Zellij-era answer, including how the plugin covers the widget's launcher/introspector role and the desktop entry-point story without a widget (launcher entries spawning Zellij boards; what raise/focus means with no widget driving it)
 - [ ] **PLUG-03**: Prior-art plugins (zellij-attention, zellaude, zellij-sessionizer/zjsh/zsm/zellij-switch, zellij-pane-picker/room) are each assessed with a build-on vs reimplement verdict
 
 ### Core Lifecycle on Zellij (LIFE)
@@ -38,18 +40,19 @@
 - [ ] **WATCH-02**: The watcher role runs under declared Zellij plugin permissions that structurally exclude destroying panes
 - [ ] **WATCH-03**: A line that needs operator attention is visibly surfaced on the board
 
-### Deck / Focus Control (DECK)
+### Deck & Operator Surface (DECK)
 
 - [ ] **DECK-01**: Operator can focus any line on the active board one-handed via the numpad deck
 - [ ] **DECK-02**: Operator can hot-seat swap lines (current swap-kitten behavior) on the Zellij board
+- [ ] **DECK-03**: Operator can browse labs with running state, assemble a cart with per-lab line counts, and patch a board from an in-plugin launcher/introspector surface — the retired widget's role, as in-mux UI
 
 ### Cutover & External Surfaces (CUT)
 
-- [ ] **CUT-01**: The Plasma 6 widget works unmodified against the Zellij backend through the same `stail --json` contract (running state, cart multi-select, per-row pane counts, patch)
+- [ ] **CUT-01**: The Plasma 6 widget is retired at cutover: the plasmoid is removed from `~/.local/share/plasma/plasmoids/` and from the panel, and plasmashell restarts with a clean journal (no errors naming the applet)
 - [ ] **CUT-02**: systemd user units regenerate Zellij board definitions when the workspace's lab membership changes
 - [ ] **CUT-03**: Per-lab launcher entries open a lab's Zellij board, and `stail switch` raises an already-running board on Plasma/Wayland
 - [ ] **CUT-04**: The regression suite covers the ported behavior set and runs green, with breadth ≥ the 147-assertion kitty baseline
-- [ ] **CUT-05**: Zellij becomes the daily driver and kitty-specific surfaces are retired only after CUT-04 is green; until then the kitty system remains fully functional
+- [ ] **CUT-05**: Zellij becomes the daily driver and kitty-specific surfaces are retired only after CUT-04 is green; until then the kitty system (including its widget) remains fully functional
 
 ## v2 Requirements
 
@@ -68,6 +71,7 @@ Explicitly excluded. Documented to prevent scope creep.
 
 | Feature | Reason |
 |---------|--------|
+| QML port / rebinding of the Plasma 6 widget | Owner addendum (2026-06-11): widget retired at cutover; launcher/introspector role moves in-plugin, not to a QML port |
 | WezTerm / tmux-hybrid mux paths | Owner locked the Zellij pivot (2026-06-11); alternatives closed for this milestone |
 | Mux-agnostic helper daemon | Report ranked last; trades the send-text-only safety property down to config policy |
 | Bash spine rewrite during this milestone | Spine survives as the CLI; T1–T5 triggers noted, not preempted |
@@ -98,6 +102,7 @@ Which phases cover which requirements. Updated during roadmap creation.
 | WATCH-03 | Phase 5 | Pending |
 | DECK-01 | Phase 5 | Pending |
 | DECK-02 | Phase 5 | Pending |
+| DECK-03 | Phase 5 | Pending |
 | CUT-01 | Phase 6 | Pending |
 | CUT-02 | Phase 6 | Pending |
 | CUT-03 | Phase 6 | Pending |
@@ -105,10 +110,10 @@ Which phases cover which requirements. Updated during roadmap creation.
 | CUT-05 | Phase 6 | Pending |
 
 **Coverage:**
-- v1 requirements: 23 total
-- Mapped to phases: 23
+- v1 requirements: 24 total
+- Mapped to phases: 24
 - Unmapped: 0 ✓
 
 ---
 *Requirements defined: 2026-06-11*
-*Last updated: 2026-06-11 after roadmap creation (traceability populated)*
+*Last updated: 2026-06-11 after owner addendum (widget retirement: CUT-01 reworked, DECK-03 added, PLUG-02 widened)*
