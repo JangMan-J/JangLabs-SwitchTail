@@ -129,22 +129,38 @@ _slug_dir() {  # $1=path -> echo a class-safe slug
   printf '%s' "$s"
 }
 
-# Labs with a live board window, in ONE kdotool round-trip: the search chains
-# `getwindowclassname '%@'` (all matched windows) onto itself, so a poll is a single KWin
-# call — not one search + a classname round-trip per window (that residual N+1 still raced).
-# The aggregate board is one window classed switchtail-exchange that runs a claude pane PER lab
-# inside it (lines-in-exchange semantics). KWin only sees the single exchange class, so when
-# the exchange is up we union in the labs its session launches — else the widget reports every
-# lab DOWN while you are juggling them in the primary aggregate mode.
-_running_labs() {  # echo each running lab (incl. "exchange" + its lines), one per line
-  local cls saw_exchange=0
-  while IFS= read -r cls; do
-    case "$cls" in
-      switchtail-exchange) printf 'exchange\n'; saw_exchange=1 ;;
-      switchtail-?*)  printf '%s\n' "${cls#switchtail-}" ;;
-    esac
-  done < <(kdotool search --class 'switchtail-' getwindowclassname '%@' 2>/dev/null)
-  [ "$saw_exchange" = 1 ] && _aggregate_labs
+# Labs with a live board, from the stail-owned run markers — ONE state-dir scan, no
+# kdotool, no KWin. A lab is UP iff ANY of its $STATE/run/<lab>/<pid> markers is live
+# (_pane_alive: /proc/<pid>/stat exists AND its start time matches the recorded start= —
+# the PID-reuse guard); a dead marker is rm -f'd in passing (lazy reap; rm -f is
+# race-idempotent, so concurrent readers reaping the same file is harmless). Marker
+# filenames are gated ^[0-9]+$ before ANY /proc or rm use — never trust a stray name.
+# 'exchange' is emitted once iff any live marker anywhere carries board=exchange.
+# Exchange-union truth (OQ-2, live accuracy): a lab counts as running-via-exchange ONLY
+# while its exchange line is actually alive — a closed exchange pane no longer reports
+# its lab running (the old _aggregate_labs session-FILE grep over-reported; retired).
+_running_labs() {  # echo each running lab (+ 'exchange' if any live board=exchange marker)
+  local d f lab pid start board saw_exchange=0
+  shopt -s nullglob
+  for d in "$STATE"/run/*/; do
+    lab="$(basename "$d")"
+    local up=0
+    for f in "$d"*; do
+      pid="$(basename "$f")"
+      [[ "$pid" =~ ^[0-9]+$ ]] || continue          # never trust a stray filename
+      start="$(grep -m1 '^start=' "$f" 2>/dev/null | cut -d= -f2)"
+      if [ -n "$start" ] && _pane_alive "$pid" "$start"; then
+        up=1
+        board="$(grep -m1 '^board=' "$f" 2>/dev/null | cut -d= -f2)"
+        [ "$board" = exchange ] && saw_exchange=1
+      else
+        rm -f "$f" 2>/dev/null                       # lazy reap; rm -f is race-idempotent
+      fi
+    done
+    [ "$up" = 1 ] && printf '%s\n' "$lab"
+  done
+  [ "$saw_exchange" = 1 ] && printf 'exchange\n'
+  return 0   # callers pipe this into grep -q under pipefail — never leak the && status
 }
 
 _need_kdotool() {  # $1=subcommand name, for the error message
@@ -660,17 +676,23 @@ cmd_patch() {
 }
 
 # ---------- subcommand: active ----------
-# Print the lab of the currently focused board window (the widget heading). Empty +
-# exit 1 when the focused window is not a board. Class switchtail-exchange -> lab "exchange".
+# Print the lab of the currently focused board (the widget heading). Empty + exit 1 when
+# not on a board. Source: $STATE/active — written by the kitty/state.py focus watcher
+# (board name on focus gain, compare-and-clear on loss); no kdotool, no KWin. The named
+# board is cross-checked against the live run markers: a stale file naming a dead board
+# (kitty crash — no loss event ever fired) reports off-board, not the ghost. A missing
+# file is the same off-board shape (the correct degraded mode before the watcher loads).
 cmd_active() {
-  _need_kdotool active
-  local json=0 cls lab="" exchange=false
+  local json=0 lab="" exchange=false f="$STATE/active"
   [ "${1:-}" = "--json" ] && json=1
-  cls="$(kdotool getactivewindow getwindowclassname 2>/dev/null)"
-  case "$cls" in
-    switchtail-exchange) lab=exchange; exchange=true ;;
-    switchtail-*)   lab="${cls#switchtail-}" ;;
-  esac
+  if [ -r "$f" ]; then
+    lab="$(head -n1 "$f" 2>/dev/null)"
+    [[ "$lab" =~ ^[A-Za-z0-9._-]+$ ]] || lab=""           # never let junk reach JSON
+    if [ -n "$lab" ]; then                                # crash-staleness cross-check
+      _running_labs | grep -qxF -- "$lab" || lab=""
+    fi
+    [ "$lab" = "exchange" ] && exchange=true
+  fi
   if [ "$json" = 1 ]; then
     if [ -n "$lab" ]; then
       printf '{"lab":"%s","display":"%s","exchange":%s}\n' "$lab" "$(_display_name "$lab")" "$exchange"
@@ -686,11 +708,10 @@ cmd_active() {
 # ---------- subcommand: list ----------
 # Every lab + whether a board window for it is currently up.
 cmd_list() {
-  _need_kdotool list
   local json=0 lab first=1 running
   [ "${1:-}" = "--json" ] && json=1
   local labs=(); mapfile -t labs < <(_discover_labs)
-  local running_set; running_set="$(_running_labs)"   # one kdotool snapshot, matched locally
+  local running_set; running_set="$(_running_labs)"   # one state-dir scan, matched locally
   if [ "$json" = 1 ]; then
     printf '['
     for lab in "${labs[@]}"; do

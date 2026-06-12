@@ -4,8 +4,9 @@
 # its PID-reuse guard (_pane_alive), the never-fail discipline (a marker failure must
 # degrade listing, never kill a pane), and the e2e `stail line` lifecycle. Live markers
 # use background `sleep` helper PIDs with real /proc start times — no fixed sleeps as
-# synchronization. Reader-side sections (list/active/reap from state) are appended by
-# plan 01-04. Set STAIL_BIN=<path> to test a checkout instead of the deployed default.
+# synchronization. Reader-side sections (§5-§7): lazy reap + hostile-filename gate,
+# the SEAM-01 no-kdotool-consult proof for list/active, and the active-file staleness
+# cross-check. Set STAIL_BIN=<path> to test a checkout instead of the deployed default.
 set -uo pipefail
 STAIL_BIN="${STAIL_BIN:-$HOME/.local/bin/stail}"
 pass=0; fail=0
@@ -66,6 +67,54 @@ grep -q '^kind=cmd:true$' "$d/$f" 2>/dev/null && ok "marker carries the full cmd
 ms="$(grep -m1 '^start=' "$d/$f" 2>/dev/null | cut -d= -f2)"
 _pane_alive "$f" "$ms" && no "dead pane's marker reads alive" || ok "exec'd true exited -> marker reap-eligible (_pane_alive false)"
 
+echo "== 5. reader: lazy reap + hostile-filename gate (_running_labs) =="
+r5="$(mktemp -d)"; STATE="$r5/state"
+sleep 60 >/dev/null 2>&1 & h5=$!
+ds="$(proc_start "$h5")"
+kill "$h5" 2>/dev/null; wait "$h5" 2>/dev/null
+mkdir -p "$STATE/run/deadlab"
+printf 'start=%s\nboard=deadlab\nkind=claude\nsid=\n' "$ds" > "$STATE/run/deadlab/$h5"   # dead: real format, helper killed
+hostile="$STATE/run/deadlab/not-a-pid;x"
+printf 'start=1\nboard=deadlab\nkind=claude\nsid=\n' > "$hostile"                        # hostile: must never reach /proc or rm
+out5="$(_running_labs)"
+[ ! -e "$STATE/run/deadlab/$h5" ] && ok "dead marker REMOVED by one _running_labs call (lazy reap)" || no "dead marker not reaped"
+[ -e "$hostile" ] && ok "hostile filename ignored AND left untouched" || no "hostile filename was removed"
+printf '%s\n' "$out5" | grep -qxF deadlab && no "lab with only-dead markers reported running" || ok "only-dead lab absent from the running set"
+
+echo "== 6. SEAM-01 proof: list/active never consult kdotool (logging fail-stub) =="
+r6="$(mktemp -d)"; STATE="$r6/state"
+ws6="$r6/ws"; mkdir -p "$ws6/zlab"; : > "$ws6/zlab/.git"; WORKSPACE="$ws6"   # one-lab workspace fixture
+klog="$r6/kdotool-consult.log"; : > "$klog"
+kdotool(){ echo "CONSULTED: $*" >>"$klog"; return 1; }
+sleep 60 >/dev/null 2>&1 & h6=$!
+mkdir -p "$STATE/run/zlab"
+printf 'start=%s\nboard=zlab\nkind=claude\nsid=\n' "$(proc_start "$h6")" > "$STATE/run/zlab/$h6"
+printf 'zlab\n' > "$STATE/active"
+out="$(cmd_list)"
+echo "$out" | grep -q 'zlab.*running' && ok "cmd_list reports the marker-backed lab running" || no "cmd_list text wrong: [$out]"
+j="$(cmd_list --json)"
+[ "$j" = '[{"lab":"zlab","display":"Zlab","running":true}]' ] && ok "cmd_list --json byte-shape held" || no "cmd_list --json wrong: [$j]"
+a="$(cmd_active)"; rc=$?
+[ "$a" = "zlab" ] && [ "$rc" -eq 0 ] && ok "cmd_active prints the active board, exit 0" || no "cmd_active wrong: [$a] rc=$rc"
+aj="$(cmd_active --json)"; rc=$?
+[ "$aj" = '{"lab":"zlab","display":"Zlab","exchange":false}' ] && [ "$rc" -eq 0 ] && ok "cmd_active --json on-board byte-shape held" || no "cmd_active --json wrong: [$aj] rc=$rc"
+[ ! -s "$klog" ] && ok "kdotool consult log EMPTY after all four list/active calls (SEAM-01)" || no "detection consulted kdotool: $(cat "$klog")"
+sed -n '/^cmd_switch()/,/^}/p' /tmp/stail-fns6.sh | grep -q '_need_kdotool switch' \
+  && ok "cmd_switch still gates on _need_kdotool (raise path kept)" || no "switch kdotool gate missing"
+kill "$h6" 2>/dev/null; wait "$h6" 2>/dev/null
+unset -f kdotool
+
+echo "== 7. active staleness cross-check: dead board / missing file -> off-board =="
+r7="$(mktemp -d)"; STATE="$r7/state"; mkdir -p "$STATE"
+printf 'ghostlab\n' > "$STATE/active"      # stale: names a board with NO live marker
+a="$(cmd_active)"; rc=$?
+[ -z "$a" ] && [ "$rc" -eq 1 ] && ok "stale active (no live marker) -> prints nothing, exit 1" || no "stale active leaked: [$a] rc=$rc"
+j="$(cmd_active --json)"; rc=$?
+[ "$j" = '{"lab":null,"display":null,"exchange":false}' ] && [ "$rc" -eq 1 ] && ok "stale active --json -> null shape byte-match + exit 1" || no "stale json wrong: [$j] rc=$rc"
+rm -f "$STATE/active"                      # watcher not loaded yet / cleared
+j="$(cmd_active --json)"; rc=$?
+[ "$j" = '{"lab":null,"display":null,"exchange":false}' ] && [ "$rc" -eq 1 ] && ok "missing active file -> same off-board degraded mode" || no "missing-file json wrong: [$j] rc=$rc"
+
 echo; echo "RESULT: $pass passed, $fail failed"
-rm -rf "$root" "$xs"; chmod 755 "$ro" 2>/dev/null; rm -rf "$ro"
+rm -rf "$root" "$xs" "$r5" "$r6" "$r7"; chmod 755 "$ro" 2>/dev/null; rm -rf "$ro"
 [ "$fail" -eq 0 ]
