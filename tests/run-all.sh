@@ -1,8 +1,11 @@
 #!/usr/bin/env bash
 # Regression suite for the stail board (CLI + kittens). Re-run after editing
-# ~/.local/bin/stail or ~/.config/kitty/{hold,swap,tail}.py. All suites must report 0 failures.
+# the stail under test or ~/.config/kitty/{hold,swap,tail}.py. All suites must report
+# 0 failures. Set STAIL_BIN=<path> to test a checkout instead of the deployed
+# ~/.local/bin/stail (the default when STAIL_BIN is unset).
 set -uo pipefail
 here="$(cd "$(dirname "$0")" && pwd)"
+echo "stail under test: ${STAIL_BIN:-$HOME/.local/bin/stail}"
 rc=0
 for t in stail-test-1.sh stail-test-2.sh stail-test-3.sh stail-test-4.sh stail-test-5.sh; do
   echo "######## $t ########"; bash "$here/$t" || rc=1; echo
