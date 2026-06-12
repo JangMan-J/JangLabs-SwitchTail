@@ -1,11 +1,12 @@
 #!/usr/bin/env bash
 # Regression tests for the review-driven fixes R2/R3/R4 against the REAL stail functions.
 set -uo pipefail
+STAIL_BIN="${STAIL_BIN:-$HOME/.local/bin/stail}"
 pass=0; fail=0
 ok(){ printf '  ✓ %s\n' "$1"; pass=$((pass+1)); }
 no(){ printf '  ✗ %s\n' "$1"; fail=$((fail+1)); }
 
-cp ~/.local/bin/stail /tmp/stail-fns.sh
+cp "$STAIL_BIN" /tmp/stail-fns.sh || { echo "FATAL: cannot copy stail under test: $STAIL_BIN" >&2; exit 1; }
 sed -i '/^# ---------- dispatch ----------/,$d' /tmp/stail-fns.sh
 # shellcheck disable=SC1091
 source /tmp/stail-fns.sh
@@ -28,10 +29,10 @@ echo "== R4: _require_valid_lab gates argv lab names =="
 
 echo "== R4: cmd_switch/cmd_line reject bad names end-to-end =="
 WORKSPACE="$HOME/JangLabs"   # real workspace for sess paths
-out="$(command ~/.local/bin/stail switch '../../evil' 2>&1)"; rc=$?
+out="$(command "$STAIL_BIN" switch '../../evil' 2>&1)"; rc=$?
 echo "  switch ../../evil -> rc=$rc: $out"
 [ "$rc" -eq 2 ] && printf '%s' "$out" | grep -q 'invalid lab name' && ok "switch rejects traversal (exit 2, no launch)" || no "switch didn't reject traversal"
-out="$(command ~/.local/bin/stail line '../../evil' /tmp 2>&1)"; rc=$?
+out="$(command "$STAIL_BIN" line '../../evil' /tmp 2>&1)"; rc=$?
 [ "$rc" -eq 2 ] && printf '%s' "$out" | grep -q 'invalid lab name' && ok "line rejects traversal (exit 2, no claude)" || no "line did not reject traversal"
 
 echo "== R2: aggregate helpers =="

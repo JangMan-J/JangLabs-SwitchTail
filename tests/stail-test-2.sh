@@ -3,6 +3,7 @@
 # primitive returns one class PER window. Part B: a deterministic kdotool stub exercising
 # stail's consumption logic (running-set, JSON, switch id-reuse + dup-warn) with no focus theft.
 set -uo pipefail
+STAIL_BIN="${STAIL_BIN:-$HOME/.local/bin/stail}"
 pass=0; fail=0
 ok(){ printf '  ✓ %s\n' "$1"; pass=$((pass+1)); }
 no(){ printf '  ✗ %s\n' "$1"; fail=$((fail+1)); }
@@ -29,7 +30,7 @@ pkill -x -f 'sleep 30' 2>/dev/null
 sleep 0.4
 
 echo "== B. stubbed-kdotool logic =="
-cp ~/.local/bin/stail /tmp/stail-fns.sh
+cp "$STAIL_BIN" /tmp/stail-fns.sh || { echo "FATAL: cannot copy stail under test: $STAIL_BIN" >&2; exit 1; }
 sed -i '/^# ---------- dispatch ----------/,$d' /tmp/stail-fns.sh
 # shellcheck disable=SC1091
 source /tmp/stail-fns.sh

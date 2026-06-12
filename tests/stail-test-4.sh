@@ -5,11 +5,12 @@
 # SWITCHTAIL_TRUNK_MAX tunable, lab-name validation, missing-dir guard, and the detach construction
 # (the session is rebuilt INSIDE a `bash -c` so it survives systemd-run/setsid severing stdin).
 set -uo pipefail
+STAIL_BIN="${STAIL_BIN:-$HOME/.local/bin/stail}"
 pass=0; fail=0
 ok(){ printf '  ✓ %s\n' "$1"; pass=$((pass+1)); }
 no(){ printf '  ✗ %s\n' "$1"; fail=$((fail+1)); }
 
-cp ~/.local/bin/stail /tmp/stail-fns.sh
+cp "$STAIL_BIN" /tmp/stail-fns.sh || { echo "FATAL: cannot copy stail under test: $STAIL_BIN" >&2; exit 1; }
 sed -i '/^# ---------- dispatch ----------/,$d' /tmp/stail-fns.sh
 # shellcheck disable=SC1091
 source /tmp/stail-fns.sh

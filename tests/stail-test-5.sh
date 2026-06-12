@@ -5,11 +5,12 @@
 # _emit_patch_session (tab packing, per-tab cd/layout/focus, focus_tab 0), the window-class
 # single-vs-multi rule, and an end-to-end shell round-trip of a path with a space + apostrophe.
 set -uo pipefail
+STAIL_BIN="${STAIL_BIN:-$HOME/.local/bin/stail}"
 pass=0; fail=0
 ok(){ printf '  ✓ %s\n' "$1"; pass=$((pass+1)); }
 no(){ printf '  ✗ %s\n' "$1"; fail=$((fail+1)); }
 
-cp ~/.local/bin/stail /tmp/stail-fns.sh
+cp "$STAIL_BIN" /tmp/stail-fns.sh || { echo "FATAL: cannot copy stail under test: $STAIL_BIN" >&2; exit 1; }
 sed -i '/^# ---------- dispatch ----------/,$d' /tmp/stail-fns.sh
 # shellcheck disable=SC1091
 source /tmp/stail-fns.sh
@@ -87,7 +88,7 @@ chmod +x /tmp/t5bin/systemd-run
 : > /tmp/t5-rt.log
 # the literal command string the executable engine would pass to the shell:
 cmdstr=$'patch lab=claude*2 dir=\'/tmp/stail-t5q/o\'\\\'\'brien app\'*2'
-PATH="/tmp/t5bin:$PATH" sh -c "$HOME/.local/bin/stail $cmdstr" >/dev/null 2>&1
+PATH="/tmp/t5bin:$PATH" sh -c "$STAIL_BIN $cmdstr" >/dev/null 2>&1
 got="$(grep -o "stail line [^ ]* \"/tmp/stail-t5q/o'brien app\"" /tmp/t5-rt.log | head -1)"
 [ -n "$got" ] && ok "custom dir with space+apostrophe resolves correctly through the shell" || no "quoting round-trip failed"
 [ "$(grep -o 'launch --title' /tmp/t5-rt.log | wc -l)" -eq 4 ] && ok "4 panes (claude*2 + dir*2)" || no "round-trip pane count wrong"

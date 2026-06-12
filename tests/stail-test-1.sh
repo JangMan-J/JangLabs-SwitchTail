@@ -1,19 +1,21 @@
 #!/usr/bin/env bash
 # Non-window verification of stail's pure logic, exercising the REAL functions from
-# ~/.local/bin/stail (dispatch tail stripped so sourcing doesn't exec a subcommand).
+# the stail under test (dispatch tail stripped so sourcing doesn't exec a subcommand).
+# Defaults to the deployed ~/.local/bin/stail; set STAIL_BIN=<path> to test a checkout.
 set -uo pipefail
+STAIL_BIN="${STAIL_BIN:-$HOME/.local/bin/stail}"
 pass=0; fail=0
 ok(){ printf '  ✓ %s\n' "$1"; pass=$((pass+1)); }
 no(){ printf '  ✗ %s\n' "$1"; fail=$((fail+1)); }
 
-cp ~/.local/bin/stail /tmp/stail-fns.sh
+cp "$STAIL_BIN" /tmp/stail-fns.sh || { echo "FATAL: cannot copy stail under test: $STAIL_BIN" >&2; exit 1; }
 sed -i '/^# ---------- dispatch ----------/,$d' /tmp/stail-fns.sh
 # shellcheck disable=SC1091
 source /tmp/stail-fns.sh
 
 echo "== 1. real generate (5 labs, no warnings expected) =="
-stail() { command ~/.local/bin/stail "$@"; }
-out="$(command ~/.local/bin/stail generate 2>&1)"; echo "  $out"
+stail() { command "$STAIL_BIN" "$@"; }
+out="$(command "$STAIL_BIN" generate 2>&1)"; echo "  $out"
 echo "$out" | grep -q 'agent claude jangsjedi jangsjyro proton' && ok "generate lists the 5 labs" || no "generate lab set unexpected"
 
 echo "== 2. name validation (#6/#7): isolated SWITCHTAIL_DIR workspace =="
