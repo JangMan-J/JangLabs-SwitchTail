@@ -12,7 +12,7 @@ Parity note (owner addendum, 2026-06-11): the Plasma 6 widget is NOT part of par
 ### Pre-Migration State Seam (SEAM)
 
 - [x] **SEAM-01**: `stail list` / `stail active` / `stail list --json` report board running state from stail-owned state, not from kdotool/KWin window-class search
-- [ ] **SEAM-02**: kdotool usage is reduced to raise/focus only; running detection no longer depends on `os_window_class` stamping
+- [x] **SEAM-02**: kdotool usage is reduced to raise/focus only; running detection no longer depends on `os_window_class` stamping
 
 ### Zellij Plugin Foundation (PLUG)
 
@@ -85,7 +85,7 @@ Which phases cover which requirements. Updated during roadmap creation.
 | Requirement | Phase | Status |
 |-------------|-------|--------|
 | SEAM-01 | Phase 1 | Complete |
-| SEAM-02 | Phase 1 | Pending |
+| SEAM-02 | Phase 1 | Complete |
 | PLUG-01 | Phase 2 | Pending |
 | PLUG-02 | Phase 2 | Pending |
 | PLUG-03 | Phase 2 | Pending |

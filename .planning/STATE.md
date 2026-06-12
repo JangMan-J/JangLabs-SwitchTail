@@ -4,13 +4,13 @@ milestone: v1.0
 milestone_name: milestone
 status: executing
 stopped_at: Completed 01-03-PLAN.md
-last_updated: "2026-06-12T09:05:22.437Z"
+last_updated: "2026-06-12T09:20:56.366Z"
 last_activity: 2026-06-12 -- Phase 01 execution started
 progress:
   total_phases: 6
   completed_phases: 0
   total_plans: 5
-  completed_plans: 2
+  completed_plans: 4
   percent: 0
 ---
 
@@ -28,7 +28,7 @@ See: .planning/PROJECT.md (updated 2026-06-11)
 ## Current Position
 
 Phase: 01 (Running-State Seam) — EXECUTING
-Plan: 4 of 5
+Plan: 5 of 5
 Status: Ready to execute
 Last activity: 2026-06-12 -- Phase 01 execution started
 
@@ -53,6 +53,7 @@ Progress: [░░░░░░░░░░] 0%
 | Phase 01 P01 | 13min | 2 tasks | 6 files |
 | Phase 01 P02 | 4min | 2 tasks | 3 files |
 | Phase 01 P03 | 8min | 3 tasks | 5 files |
+| Phase 01 P04 | 9min | 3 tasks | 6 files |
 
 ### Decisions
 
@@ -67,6 +68,9 @@ Decisions are logged in PROJECT.md Key Decisions table. Recent decisions affecti
 - [Phase 01]: 01-02: charset gate and compare-and-clear mutation-verified — removing either makes state-test.py fail
 - [Phase 01]: 01-03: run marker written once pre-dispatch in cmd_line with sid= empty — single call site covers claude/shell/cmd: kinds (OQ-3), minimizes code between cd guard and exec; sid is informational per the run-marker contract
 - [Phase 01]: 01-03: 4 pre-existing launch-line shape assertions (test-4 hold-tags adjacency, test-5 pane shape + shell/cmd line-end anchors) updated to the board-stamped shape — Rule 3, behavioral intent preserved and strengthened
+- [Phase ?]: 01-04: _running_labs ends with explicit return 0 — under pipefail the && tail status broke every '_running_labs | grep -q' caller (active cross-check, trunk warning) even on a match
+- [Phase ?]: 01-04: OQ-2 live exchange-union truth regression-locked from both consumer directions — dead exchange line neither lists its lab running (test-2 B1) nor false-raises on switch (test-3 launches fresh)
+- [Phase ?]: 01-04: test-4 STATE hermetic from §4 — cmd_trunk's marker scan must never read/reap the operator's live state dir from inside the suite
 
 ### Pending Todos
 
@@ -89,6 +93,6 @@ None yet.
 
 **Branch model:** WIP on `versioning` (main = stable); per-phase branches enabled: `gsd/phase-{phase}-{slug}` (worktrees on).
 
-Last session: 2026-06-12T09:05:22.433Z
+Last session: 2026-06-12T09:20:40.109Z
 Stopped at: Completed 01-03-PLAN.md
 Resume file: None
