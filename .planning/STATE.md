@@ -1,11 +1,16 @@
 ---
-gsd_state_version: '1.0'  # placeholder; syncStateFrontmatter overwrites on first state.* call
-status: planning
+gsd_state_version: 1.0
+milestone: v1.0
+milestone_name: milestone
+status: executing
+stopped_at: Completed 01-01-PLAN.md
+last_updated: "2026-06-12T08:42:17.364Z"
+last_activity: 2026-06-12 -- Phase 01 execution started
 progress:
   total_phases: 6
   completed_phases: 0
-  total_plans: 0
-  completed_plans: 0
+  total_plans: 5
+  completed_plans: 1
   percent: 0
 ---
 
@@ -16,22 +21,23 @@ progress:
 See: .planning/PROJECT.md (updated 2026-06-11)
 
 **Core value:** The operator can route, watch, park, and resume a fleet of Claude Code sessions one-handed — and the daily-driver cockpit never breaks while its foundation is being replaced.
-**Current focus:** Phase 1 — Running-State Seam (pre-migration, on the live kitty system)
+**Current focus:** Phase 01 — Running-State Seam
 
 **Milestone:** Zellij Foundation — functional parity with the kitty-based system, running on Zellij (WASM plugin, Rust/zellij-tile). Kitty stays the daily driver until Phase 6 cutover; the Plasma 6 widget also retires at cutover, its launcher/introspector role absorbed into the plugin (not part of parity as a QML surface).
 
 ## Current Position
 
-Phase: 1 of 6 (Running-State Seam)
-Plan: 0 of TBD in current phase
-Status: Ready to plan
-Last activity: 2026-06-11 — Project initialized from ingest; owner addendum applied same day: widget retirement folded into the pivot (24 reqs; CUT-01 reworked, DECK-03 added, PLUG-02 widened)
+Phase: 01 (Running-State Seam) — EXECUTING
+Plan: 2 of 5
+Status: Ready to execute
+Last activity: 2026-06-12 -- Phase 01 execution started
 
 Progress: [░░░░░░░░░░] 0%
 
 ## Performance Metrics
 
 **Velocity:**
+
 - Total plans completed: 0
 - Average duration: -
 - Total execution time: -
@@ -44,6 +50,8 @@ Progress: [░░░░░░░░░░] 0%
 
 ## Accumulated Context
 
+| Phase 01 P01 | 13min | 2 tasks | 6 files |
+
 ### Decisions
 
 Decisions are logged in PROJECT.md Key Decisions table. Recent decisions affecting current work:
@@ -51,6 +59,8 @@ Decisions are logged in PROJECT.md Key Decisions table. Recent decisions affecti
 - LOCKED (owner, 2026-06-11; extended same day): rebuild on Zellij AND retire the Plasma 6 widget — the plugin contains the entire system surface (launcher/introspector moves in-mux); the report's defer verdict is superseded
 - State seam before any Zellij work (ingest migration prescription); emitter unification already landed (ee250e1)
 - `--json` survives for CLI/scripting/systemd consumers but is no longer a frozen GUI boundary (widget retired); bash spine survives as the CLI (T1–T5 noted, not preempted)
+- [Phase ?]: 01-01: cp of stail-under-test guarded with FATAL exit so a bogus STAIL_BIN cannot silently source a stale /tmp/stail-fns.sh
+- [Phase ?]: 01-01: pre-existing fixture drift (labs claude/jangsjedi renamed/removed 2026-06-11; 35 failing assertions) logged to deferred-items.md, not fixed — out of scope for the mechanical STAIL_BIN substitution
 
 ### Pending Todos
 
@@ -61,6 +71,7 @@ None yet.
 - Zellij plugin API details must come from per-phase research (workflow.research enabled) — do not trust roadmap-time assumptions
 - The no-widget desktop entry-point story (host terminal, launcher entries spawning boards, raise/focus semantics) must be settled by Phase 2 verdicts before Phases 5–6 depend on it
 - Watch for spine-language triggers T1–T5 firing mid-milestone (see intel/context.md); note, don't preempt
+- Test-fixture drift: suites hardcode labs claude/jangsjedi (renamed to synapse / removed 2026-06-11) — 35 pre-existing failures make every ALL-SUITES-PASSED gate unattainable until fixtures are re-pointed; resolve before 01-03/01-04 suite-green gates (see phases/01-running-state-seam/deferred-items.md)
 
 ## Deferred Items
 
@@ -72,6 +83,6 @@ None yet.
 
 **Branch model:** WIP on `versioning` (main = stable); per-phase branches enabled: `gsd/phase-{phase}-{slug}` (worktrees on).
 
-Last session: 2026-06-12
-Stopped at: Session resumed via /gsd-resume-work; handoff consumed, proceeding to Phase 1 planning (/gsd-plan-phase 1)
-Resume file: None (HANDOFF.json + .continue-here.md consumed on resume)
+Last session: 2026-06-12T08:42:17.360Z
+Stopped at: Completed 01-01-PLAN.md
+Resume file: None
