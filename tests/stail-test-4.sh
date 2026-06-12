@@ -37,10 +37,11 @@ echo "== 3. honors SWITCHTAIL_LAYOUT for the transient session =="
 [ "$(_emit_trunk_session synapse 2 | grep '^layout ')" = 'layout tall' ] \
   && ok "layout defaults to tall" || no "default layout wrong"
 
-# From here, stub the launcher + kdotool so nothing real spawns.
+# From here, stub the launcher so nothing real spawns, and redirect STATE so cmd_trunk's
+# already-up check (a $STATE/run marker scan) never reads — or reaps — the live state dir.
 echo "== 4. cmd_trunk launches via the stdin-safe bash -c construction =="
 _launch_detached(){ printf '%s\n' "$*" >>/tmp/trunk-launch.log; }
-kdotool(){ :; }   # no windows up by default
+t4root="$(mktemp -d)"; STATE="$t4root/state"   # hermetic: no markers -> nothing reads as up
 : > /tmp/trunk-launch.log
 ( cmd_trunk synapse 2 ) >/dev/null 2>&1
 grep -q 'bash -c' /tmp/trunk-launch.log && ok "detached command is a bash -c (rebuilds the pipe in-tree)" || no "not launched via bash -c"
@@ -85,11 +86,15 @@ echo "== 9. lab-name validation + missing-dir guard (no launch on either) =="
 [ ! -s /tmp/trunk-launch.log ] && ok "no window of broken panes opened" || no "launched into a missing dir"
 
 echo "== 10. already-up warning (second trunk shares the class) =="
-# stub kdotool so a 'synapse' window appears to exist
-kdotool(){ case "$*" in "search --class ^switchtail-synapse$") echo '{existing}';; *) :;; esac; }
+# a LIVE run marker for synapse — the warning now keys off stail-owned state, not kdotool
+sleep 60 >/dev/null 2>&1 & h10=$!
+ps10="$(cat "/proc/$h10/stat")"; ps10="${ps10##*) }"; ps10="$(awk '{print $20}' <<<"$ps10")"
+mkdir -p "$STATE/run/synapse"
+printf 'start=%s\nboard=synapse\nkind=claude\nsid=\n' "$ps10" > "$STATE/run/synapse/$h10"
 warn="$( ( cmd_trunk synapse 1 ) 2>&1 >/dev/null )"
 echo "$warn" | grep -qi 'already up' && ok "warns that a second same-class window is opening" || no "no already-up warning"
+kill "$h10" 2>/dev/null; wait "$h10" 2>/dev/null
 
 echo; echo "RESULT: $pass passed, $fail failed"
-rm -f /tmp/trunk-launch.log
+rm -f /tmp/trunk-launch.log; rm -rf "$t4root"
 [ "$fail" -eq 0 ]

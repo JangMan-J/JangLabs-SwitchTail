@@ -35,20 +35,40 @@ echo "  switch ../../evil -> rc=$rc: $out"
 out="$(command "$STAIL_BIN" line '../../evil' /tmp 2>&1)"; rc=$?
 [ "$rc" -eq 2 ] && printf '%s' "$out" | grep -q 'invalid lab name' && ok "line rejects traversal (exit 2, no claude)" || no "line did not reject traversal"
 
-echo "== R2: aggregate helpers =="
-agg="$(_aggregate_labs | tr '\n' ' ')"; echo "  aggregate labs: $agg"
-echo "$agg" | grep -qw agent && echo "$agg" | grep -qw proton && ok "_aggregate_labs lists the panes" || no "_aggregate_labs wrong"
-_lab_in_aggregate agent && ok "_lab_in_aggregate agent = true" || no "_lab_in_aggregate agent false"
-_lab_in_aggregate nope_not_a_lab && no "_lab_in_aggregate matched a non-pane" || ok "_lab_in_aggregate rejects a non-pane"
+# Live-marker fixtures for the R2 switch-DECISION tests: a "live" marker is backed by a
+# real background sleep helper with its real /proc start time (the writer's exact format).
+# The decision reads $STATE/run; the RAISE stays kdotool (activate-log stubs as before).
+proc_start(){ local s; s="$(cat "/proc/$1/stat" 2>/dev/null)" || return 1; s="${s##*) }"; awk '{print $20}' <<<"$s"; }
+HELPERS=(); R2DIRS=()
+mk_marker(){ # $1=lab $2=board -> write one LIVE marker for lab; echoes the helper pid
+  sleep 60 >/dev/null 2>&1 & local hp=$!
+  HELPERS+=("$hp")
+  mkdir -p "$STATE/run/$1"
+  printf 'start=%s\nboard=%s\nkind=claude\nsid=\n' "$(proc_start "$hp")" "$2" > "$STATE/run/$1/$hp"
+  printf '%s' "$hp"
+}
+r2_state(){ STATE="$(mktemp -d)/state"; R2DIRS+=("$(dirname "$STATE")"); }
+
+echo "== R2: _lab_in_exchange reads LIVE board=exchange markers =="
+r2_state
+mk_marker agent exchange >/dev/null
+mk_marker proton proton >/dev/null
+_lab_in_exchange agent && ok "live exchange line -> in exchange" || no "live exchange marker missed"
+_lab_in_exchange proton && no "standalone marker counted as an exchange line" || ok "standalone (board=proton) marker is NOT an exchange line"
+dead="$(mk_marker zombie exchange)"; kill "$dead" 2>/dev/null; wait "$dead" 2>/dev/null
+_lab_in_exchange zombie && no "DEAD exchange marker counted live" || ok "dead exchange marker -> not in exchange (live accuracy)"
+_lab_in_exchange nope_not_a_lab && no "matched a lab with no markers" || ok "no markers at all -> not in exchange"
 
 echo "== R2: cmd_switch raises the exchange when a lab is live only inside it =="
+r2_state
+mk_marker agent exchange >/dev/null     # agent lives ONLY as a line in the exchange board
 : > /tmp/r2-activate.log
-# stub kdotool: agent has NO standalone window; the aggregate 'all' window IS up.
+# stub kdotool: agent has NO standalone window; the exchange window IS up (raise stays kdotool).
 kdotool() {
   case "$*" in
-    "search --class ^switchtail-agent$")  : ;;                       # no standalone agent window
-    "search --class ^switchtail-exchange$")    printf '%s\n' '{exchange-win}' ;; # exchange is up
-    windowactivate\ *)                 shift; echo "$*" >>/tmp/r2-activate.log ;;
+    "search --class ^switchtail-agent$")    : ;;                              # no standalone agent window
+    "search --class ^switchtail-exchange$") printf '%s\n' '{exchange-win}' ;; # exchange is up
+    windowactivate\ *)                      shift; echo "$*" >>/tmp/r2-activate.log ;;
     *) : ;;
   esac
 }
@@ -59,26 +79,30 @@ echo "$warn" | grep -q 'exchange' && ok "explains it is raising the exchange" ||
 
 echo "== R2: a standalone window still wins over the exchange =="
 : > /tmp/r2-activate.log
+# same STATE — agent STILL has a live exchange marker, but a standalone window exists too
 kdotool() {
   case "$*" in
-    "search --class ^switchtail-agent$")  printf '%s\n' '{standalone-agent}' ;;
-    "search --class ^switchtail-exchange$")    printf '%s\n' '{exchange-win}' ;;
-    windowactivate\ *)                 shift; echo "$*" >>/tmp/r2-activate.log ;;
+    "search --class ^switchtail-agent$")    printf '%s\n' '{standalone-agent}' ;;
+    "search --class ^switchtail-exchange$") printf '%s\n' '{exchange-win}' ;;
+    windowactivate\ *)                      shift; echo "$*" >>/tmp/r2-activate.log ;;
     *) : ;;
   esac
 }
 cmd_switch agent >/dev/null 2>&1; act="$(cat /tmp/r2-activate.log)"
 [ "$act" = '{standalone-agent}' ] && ok "standalone agent window raised (not the exchange)" || no "raised wrong window: '$act'"
 
-echo "== R2: lab neither standalone nor in aggregate -> launches (no false raise) =="
+echo "== R2: no LIVE marker (only a dead exchange line) -> launches (no false raise) =="
+r2_state
+dead="$(mk_marker proton exchange)"; kill "$dead" 2>/dev/null; wait "$dead" 2>/dev/null
 : > /tmp/r2-launch.log
 kdotool() { case "$*" in "search --class ^switchtail-"*) : ;; *) : ;; esac; }   # nothing is up
 _launch_detached() { echo "LAUNCH: $*" >>/tmp/r2-launch.log; }               # stub the launch
-# 'proton' is in the aggregate set, but aggregate isn't up (kdotool returns nothing), so it must launch
+# proton's exchange line already DIED (OQ-2 live truth: NOT running) -> must launch fresh
 cmd_switch proton >/dev/null 2>&1; launched="$(cat /tmp/r2-launch.log)"
 echo "  $launched"
-echo "$launched" | grep -q 'proton.kitty-session' && ok "launches the session when nothing is up" || no "did not launch: '$launched'"
+echo "$launched" | grep -q 'proton.kitty-session' && ok "launches the session when nothing is live" || no "did not launch: '$launched'"
 
 echo; echo "RESULT: $pass passed, $fail failed"
-rm -rf "$ws" /tmp/r3warn /tmp/r2-activate.log /tmp/r2-launch.log
+for hp in "${HELPERS[@]:-}"; do kill "$hp" 2>/dev/null; wait "$hp" 2>/dev/null; done
+rm -rf "$ws" "${R2DIRS[@]:-}" /tmp/r3warn /tmp/r2-activate.log /tmp/r2-launch.log
 [ "$fail" -eq 0 ]

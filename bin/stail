@@ -163,6 +163,23 @@ _running_labs() {  # echo each running lab (+ 'exchange' if any live board=excha
   return 0   # callers pipe this into grep -q under pipefail — never leak the && status
 }
 
+# Is the lab live as a line INSIDE the exchange board? Same scan discipline as
+# _running_labs (nullglob + ^[0-9]+$ filename gate + _pane_alive), but reap-free —
+# reaping stays centralized in _running_labs so this stays a pure read. Drives
+# cmd_switch's raise-the-exchange fallback from LIVE markers (OQ-2), not a file grep.
+_lab_in_exchange() {  # $1=lab -> 0 iff the lab has a LIVE marker with board=exchange
+  local f pid start
+  shopt -s nullglob
+  for f in "$STATE/run/$1"/*; do
+    pid="$(basename "$f")"
+    [[ "$pid" =~ ^[0-9]+$ ]] || continue          # never trust a stray filename
+    start="$(grep -m1 '^start=' "$f" 2>/dev/null | cut -d= -f2)"
+    { [ -n "$start" ] && _pane_alive "$pid" "$start"; } || continue
+    [ "$(grep -m1 '^board=' "$f" 2>/dev/null | cut -d= -f2)" = exchange ] && return 0
+  done
+  return 1
+}
+
 _need_kdotool() {  # $1=subcommand name, for the error message
   command -v kdotool >/dev/null 2>&1 || {
     echo "stail $1: kdotool not found — install it (paru -S kdotool); needed for window introspection" >&2
@@ -178,18 +195,6 @@ _require_valid_lab() {  # $1=subcommand, $2=lab
   [[ "$2" =~ ^[A-Za-z0-9._-]+$ ]] || {
     echo "stail $1: invalid lab name '$2' (must match [A-Za-z0-9._-])" >&2; exit 2
   }
-}
-
-# ---------- shared: the labs the exchange (all-labs aggregate) board runs as lines ----------
-# The aggregate is ONE window (class switchtail-exchange) running a claude pane per lab. These helpers
-# read that pane set from its session file so 'list' can report those labs running and 'switch'
-# can raise the aggregate instead of spawning a duplicate standalone window.
-_aggregate_labs() {  # echo each lab the switchtail-exchange session runs, one per line
-  [ -f "$OUTDIR/switchtail-exchange$EXT" ] || return 0
-  grep -oE -- '--var lab=[A-Za-z0-9._-]+' "$OUTDIR/switchtail-exchange$EXT" 2>/dev/null | cut -d= -f2
-}
-_lab_in_aggregate() {  # $1=lab -> 0 if it is one of the aggregate's panes
-  _aggregate_labs | grep -qxF -- "$1"
 }
 
 # ---------- shared: launch a GUI process fully detached from the caller ----------
@@ -561,10 +566,10 @@ cmd_trunk() {
     echo "stail trunk: lab dir '$WORKSPACE/$lab' not found — run 'stail generate'? (refusing to open a window of broken panes)" >&2
     exit 1
   fi
-  # A standalone window for this lab already up? It shares the class, so this opens a SECOND
-  # one (intended — a separate trunk) but `switch`/active would then raise/name arbitrarily
-  # among them; surface that rather than silently doubling.
-  if command -v kdotool >/dev/null 2>&1 && [ -n "$(_win_ids "$lab")" ]; then
+  # The lab already up (a live run marker)? The new window shares the class, so this opens
+  # a SECOND one (intended — a separate trunk) but `switch`/active would then raise/name
+  # arbitrarily among them; surface that rather than silently doubling.
+  if _running_labs | grep -qxF -- "$lab"; then
     echo "stail trunk: a '$lab' board window is already up; opening a second (both share class switchtail-$lab)" >&2
   fi
   # The session is piped into `kitty --session -`, but the detach paths both sever the caller's
@@ -745,10 +750,12 @@ cmd_switch() {
     kdotool windowactivate "$(printf '%s\n' "$ids" | head -n1)" >/dev/null 2>&1
     return 0
   fi
-  # No standalone window for this lab. If it is live as a line inside the exchange board,
-  # raise THAT window rather than spawning a duplicate session — 'list' reports such a lab
-  # running:true via the same union, so this keeps "running ⇒ switch raises" honest.
-  if [ "$lab" != "exchange" ] && _lab_in_aggregate "$lab"; then
+  # No standalone window for this lab. If it is live as a line inside the exchange board
+  # (a live run marker with board=exchange), raise THAT window rather than spawning a
+  # duplicate session — 'list' reports such a lab running:true via the same marker union,
+  # so this keeps "running ⇒ switch raises" honest. No exchange window found despite the
+  # marker (sub-second race / stale state) falls through to the launch tail below.
+  if [ "$lab" != "exchange" ] && _lab_in_exchange "$lab"; then
     exch_ids="$(_win_ids exchange)"
     if [ -n "$exch_ids" ]; then
       echo "stail switch: '$lab' runs as a line in the exchange board; raising it" >&2
