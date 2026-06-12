@@ -1,7 +1,0 @@
-# Python bytecode
-__pycache__/
-*.pyc
-.pytest_cache/
-
-# Claude Code local scratch (handoffs, workflow scripts) — never committed
-.claude/
