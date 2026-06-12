@@ -28,7 +28,14 @@ This milestone replaces SwitchTail's kitty foundation with a Zellij WASM plugin 
   2. kdotool appears only on the raise/focus path (`stail switch`); removing it entirely would degrade raising, never listing
   3. The Plasma widget (still installed until Phase 6 cutover) shows correct running state with zero widget changes, confirming the `--json` contract held through the seam
   4. The kitty daily driver passes the full regression suite (147-assertion baseline plus new state-seam assertions)
-**Plans**: TBD
+**Plans**: 5 plans
+
+Plans:
+- [ ] 01-01-PLAN.md — STAIL_BIN test-harness parametrization (honest worktree testing; Wave 0)
+- [ ] 01-02-PLAN.md — kitty/state.py focus watcher + state.conf + kitty-stubbed unit suite
+- [ ] 01-03-PLAN.md — Run-marker writers: _run_mark/_pane_alive, board stamping, cmd_line marker write, stail-test-6
+- [ ] 01-04-PLAN.md — Readers re-sourced: list/active/trunk/switch off markers, test-2/3/4 rewrites, post-seam docs
+- [ ] 01-05-PLAN.md — Live deploy (symlinks, include, regen) + human-verified live checks (widget/A2/A3)
 
 ### Phase 2: Zellij Plugin Feasibility
 **Goal**: Confidence, backed by a running proof-of-concept, that Zellij can cover kitty's four fused roles — mux/session grammar, scriptable window model, watcher host, GUI host — plus the retired widget's launcher/introspector role, with an architecture decision on what lives in the plugin vs in stail
@@ -97,7 +104,7 @@ Phases execute in numeric order: 1 → 2 → 3 → 4 → 5 → 6
 
 | Phase | Plans Complete | Status | Completed |
 |-------|----------------|--------|-----------|
-| 1. Running-State Seam | 0/TBD | Not started | - |
+| 1. Running-State Seam | 0/5 | Not started | - |
 | 2. Zellij Plugin Feasibility | 0/TBD | Not started | - |
 | 3. Core Lifecycle on Zellij | 0/TBD | Not started | - |
 | 4. Hold/Resume on Zellij | 0/TBD | Not started | - |
