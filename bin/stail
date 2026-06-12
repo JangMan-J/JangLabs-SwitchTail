@@ -8,8 +8,9 @@
 #
 # Subcommands:
 #   generate            (re)generate kitty session files + .desktop launchers, one per lab.
-#   line <lab> [dir] [kind]  per-pane launcher. kind = claude (default; hold-aware resume)
-#                       | shell (a login $SHELL) | cmd:<argv> (an arbitrary command).
+#   line <lab> [dir] [kind] [board]  per-pane launcher. kind = claude (default; hold-aware
+#                       resume) | shell (a login $SHELL) | cmd:<argv> (an arbitrary command).
+#                       board = the window the pane lives in (defaults to <lab>).
 #   trunk  <lab> [N]    launch ONE board window for <lab> with N parallel claude lines.
 #   patch  SPEC...      patch a cart of selections into ONE tabbed board.
 #   active  [--json]    print the focused board's lab (the widget heading).
@@ -39,7 +40,7 @@ usage() {
 stail — SwitchTail board CLI
 usage:
   stail generate              regenerate kitty session + .desktop files (one per lab)
-  stail line <lab> [dir] [kind]   per-pane launcher (kind: claude|shell|cmd:<argv>)
+  stail line <lab> [dir] [kind] [board]   per-pane launcher (kind: claude|shell|cmd:<argv>)
   stail trunk   <lab> [N]     open one board window for <lab> with N claude lines (default 1)
   stail patch   SPEC...       patch a cart of selections into one tabbed board (see below)
   stail active  [--json]      print the focused board's lab (empty if not on one)
@@ -293,7 +294,7 @@ _pane_alive() {  # $1=pid $2=recorded start -> 0 iff the same process is still a
 # the kittens gate on stail-computed policy, never on a kind literal.
 _emit_session() {  # $1=class $2=layout $3=tabmax ; reads E_DIR/E_LAB/E_KIND/E_TITLE
   local cls="$1" layout="$2" tabmax="${3:-0}"
-  local i in_tab=0 first_tab=1 prev_dir="" kind cvar flags
+  local i in_tab=0 first_tab=1 prev_dir="" kind cvar flags board="${cls#switchtail-}"
   if [ "$tabmax" -eq 0 ]; then
     echo "layout $layout"
   fi
@@ -311,7 +312,7 @@ _emit_session() {  # $1=class $2=layout $3=tabmax ; reads E_DIR/E_LAB/E_KIND/E_T
     flags=""
     _kind_holdable "$cvar" && flags+=" --var holdable=1"
     _kind_stylable "$cvar" && flags+=" --var stylable=1"
-    echo "launch --title \"${E_TITLE[$i]}\" --var lab=${E_LAB[$i]} --var kind=$cvar$flags stail line ${E_LAB[$i]} \"${E_DIR[$i]}\" \"$kind\""
+    echo "launch --title \"${E_TITLE[$i]}\" --var lab=${E_LAB[$i]} --var board=$board --var kind=$cvar$flags stail line ${E_LAB[$i]} \"${E_DIR[$i]}\" \"$kind\" $board"
     if [ "$tabmax" -gt 0 ]; then
       [ "$in_tab" -eq 0 ] && echo "focus"
       in_tab=$((in_tab+1)); [ "$in_tab" -ge "$tabmax" ] && in_tab=0
@@ -455,13 +456,25 @@ cmd_generate() {
 # marker is one-shot. The previous transcript is never deleted — always reachable via
 # `claude --resume`.
 cmd_line() {
-  local lab dir kind marker fresh
-  lab="${1:?usage: stail line <lab> [dir] [kind]}"
+  local lab dir kind board marker fresh
+  lab="${1:?usage: stail line <lab> [dir] [kind] [board]}"
   _require_valid_lab line "$lab"
   dir="${2:-$WORKSPACE/$lab}"
   kind="${3:-claude}"
+  board="${4:-$lab}"   # pre-regen 3-arg session files default board to the lab
+  # board reaches marker-file CONTENT only (never a path component), but _running_labs will
+  # parse it back out — re-validate with _require_valid_lab's charset, degrading to the lab
+  # rather than aborting (a malformed board must never kill the pane).
+  [[ "$board" =~ ^[A-Za-z0-9._-]+$ ]] || board="$lab"
   mkdir -p "$STATE"
   cd "$dir" 2>/dev/null || { echo "stail line: dir '$dir' not found — aborting (refusing to root the pane in \$HOME)" >&2; exit 1; }
+  # Run marker: written ONCE here, pre-dispatch, so claude, shell, AND cmd: panes all count
+  # toward "board running" (parity with the old class-based counting — every pane is a
+  # window pane). Written with sid= empty rather than per-branch after sid resolution: that
+  # minimizes new code between the cd guard and the exec (a failure on this path must never
+  # kill the pane — _run_mark cannot fail), and no Phase-1 reader consumes sid (the run-
+  # marker contract above declares sid informational/optional).
+  _run_mark "$lab" "$board" "$kind" ""
   case "$kind" in
     shell)
       exec "${SHELL:-/bin/sh}" -l

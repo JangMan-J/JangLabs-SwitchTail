@@ -55,7 +55,7 @@ s="$(emit_of switchtail-multi lab=synapse*3 lab=agent*4)"
 printf '%s\n' "$s" | tail -1 | grep -qx 'focus_tab 0' && ok "ends with focus_tab 0" || no "missing focus_tab 0"
 printf '%s\n' "$s" | grep -q '^os_window_class switchtail-multi$' && ok "honors the passed window class" || no "class line wrong"
 # panes carry the hold tags + an explicit dir arg
-printf '%s\n' "$s" | grep -q -- '--var lab=synapse --var kind=claude --var holdable=1 --var stylable=1 stail line synapse ' && ok "claude panes carry kind + table-derived holdable/stylable flags" || no "pane launch shape wrong"
+printf '%s\n' "$s" | grep -q -- '--var lab=synapse --var board=multi --var kind=claude --var holdable=1 --var stylable=1 stail line synapse ' && ok "claude panes carry board + kind + table-derived holdable/stylable flags" || no "pane launch shape wrong"
 # shell/cmd panes must NOT carry the agent flags (the kind table says they are not holdable/stylable)
 printf '%s\n' "$s" | grep -- '--var kind=claude' | grep -qv 'holdable=1' && no "a claude pane missing flags" || ok "every claude pane is flagged holdable"
 
@@ -108,9 +108,9 @@ mkdir -p "/tmp/stail-t5cmd/u@host"
 sl9="$(slugs_of 'dir=/tmp/stail-t5cmd/u@host')"; [ "$sl9" = "u-host " ] && ok "  and slug still derives from the full basename (u-host)" || no "false-@ slug wrong: [$sl9]"
 # emit wires the kind to BOTH --var kind (cmd:* collapsed to 'cmd') AND the line argv (full)
 s9="$(emit_of switchtail-multi lab=synapse@shell 'dir=/tmp/stail-t5cmd@cmd:git status')"
-printf '%s\n' "$s9" | grep -q -- '--var kind=shell stail line synapse .* "shell"$' && ok "shell pane: --var kind=shell + line arg \"shell\"" || no "shell emit wrong"
+printf '%s\n' "$s9" | grep -q -- '--var kind=shell stail line synapse .* "shell" multi$' && ok "shell pane: --var kind=shell + line arg \"shell\" + board argv" || no "shell emit wrong"
 printf '%s\n' "$s9" | grep -q -- '--var kind=cmd stail line ' && ok "cmd pane: --var kind=cmd (collapsed, space-free)" || no "cmd var not collapsed"
-printf '%s\n' "$s9" | grep -q -- '"cmd:git status"$' && ok "cmd pane: full 'cmd:git status' passed as the line argv" || no "cmd full argv not passed"
+printf '%s\n' "$s9" | grep -q -- '"cmd:git status" multi$' && ok "cmd pane: full 'cmd:git status' passed as the line argv (board argv after)" || no "cmd full argv not passed"
 rm -rf /tmp/stail-t5cmd
 
 echo; echo "RESULT: $pass passed, $fail failed"

@@ -21,8 +21,8 @@ s="$(_emit_trunk_session synapse 3)"
 [ "$(printf '%s\n' "$s" | grep -c '^launch ')" -eq 3 ] && ok "N=3 emits 3 launch lines" || no "wrong launch count"
 [ "$(printf '%s\n' "$s" | grep -c '^focus$')" -eq 1 ] && ok "exactly one focus (the master pane)" || no "focus count wrong"
 printf '%s\n' "$s" | grep -qx 'os_window_class switchtail-synapse' && ok "class is switchtail-synapse (contract preserved)" || no "class wrong"
-[ "$(printf '%s\n' "$s" | grep -c -- '--var lab=synapse --var kind=claude')" -eq 3 ] \
-  && ok "every pane carries the hold tags (--var lab/kind)" || no "panes missing hold tags"
+[ "$(printf '%s\n' "$s" | grep -c -- '--var lab=synapse --var board=synapse --var kind=claude')" -eq 3 ] \
+  && ok "every pane carries the hold tags (--var lab/board/kind)" || no "panes missing hold tags"
 printf '%s\n' "$s" | grep -qx 'cd /home/jangmanj/JangLabs/synapse' && ok "cd to the lab repo before the panes" || no "missing/wrong cd"
 printf '%s\n' "$s" | grep -q 'Synapse 1' && printf '%s\n' "$s" | grep -q 'Synapse 3' && ok "panes numbered 1..N in the title" || no "pane numbering wrong"
 
