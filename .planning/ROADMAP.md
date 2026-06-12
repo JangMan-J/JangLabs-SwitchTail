@@ -37,7 +37,7 @@ This milestone replaces SwitchTail's kitty foundation with a Zellij WASM plugin 
 Plans:
 
 - [x] 01-01-PLAN.md — STAIL_BIN test-harness parametrization (honest worktree testing; Wave 0)
-- [ ] 01-02-PLAN.md — kitty/state.py focus watcher + state.conf + kitty-stubbed unit suite
+- [x] 01-02-PLAN.md — kitty/state.py focus watcher + state.conf + kitty-stubbed unit suite
 - [ ] 01-03-PLAN.md — Run-marker writers: _run_mark/_pane_alive, board stamping, cmd_line marker write, stail-test-6
 - [ ] 01-04-PLAN.md — Readers re-sourced: list/active/trunk/switch off markers, test-2/3/4 rewrites, post-seam docs
 - [ ] 01-05-PLAN.md — Live deploy (symlinks, include, regen) + human-verified live checks (widget/A2/A3)
@@ -124,7 +124,7 @@ Phases execute in numeric order: 1 → 2 → 3 → 4 → 5 → 6
 
 | Phase | Plans Complete | Status | Completed |
 |-------|----------------|--------|-----------|
-| 1. Running-State Seam | 1/5 | In Progress|  |
+| 1. Running-State Seam | 2/5 | In Progress|  |
 | 2. Zellij Plugin Feasibility | 0/TBD | Not started | - |
 | 3. Core Lifecycle on Zellij | 0/TBD | Not started | - |
 | 4. Hold/Resume on Zellij | 0/TBD | Not started | - |

@@ -3,14 +3,14 @@ gsd_state_version: 1.0
 milestone: v1.0
 milestone_name: milestone
 status: executing
-stopped_at: Completed 01-01-PLAN.md
-last_updated: "2026-06-12T08:42:17.364Z"
+stopped_at: Completed 01-02-PLAN.md
+last_updated: "2026-06-12T08:47:46.699Z"
 last_activity: 2026-06-12 -- Phase 01 execution started
 progress:
   total_phases: 6
   completed_phases: 0
   total_plans: 5
-  completed_plans: 1
+  completed_plans: 2
   percent: 0
 ---
 
@@ -28,7 +28,7 @@ See: .planning/PROJECT.md (updated 2026-06-11)
 ## Current Position
 
 Phase: 01 (Running-State Seam) — EXECUTING
-Plan: 2 of 5
+Plan: 3 of 5
 Status: Ready to execute
 Last activity: 2026-06-12 -- Phase 01 execution started
 
@@ -51,6 +51,7 @@ Progress: [░░░░░░░░░░] 0%
 ## Accumulated Context
 
 | Phase 01 P01 | 13min | 2 tasks | 6 files |
+| Phase 01 P02 | 4min | 2 tasks | 3 files |
 
 ### Decisions
 
@@ -61,6 +62,8 @@ Decisions are logged in PROJECT.md Key Decisions table. Recent decisions affecti
 - `--json` survives for CLI/scripting/systemd consumers but is no longer a frozen GUI boundary (widget retired); bash spine survives as the CLI (T1–T5 noted, not preempted)
 - [Phase ?]: 01-01: cp of stail-under-test guarded with FATAL exit so a bogus STAIL_BIN cannot silently source a stale /tmp/stail-fns.sh
 - [Phase ?]: 01-01: pre-existing fixture drift (labs claude/jangsjedi renamed/removed 2026-06-11; 35 failing assertions) logged to deferred-items.md, not fixed — out of scope for the mechanical STAIL_BIN substitution
+- [Phase 01]: 01-02: state-test.py loads state.py repo-relative (dirname(__file__)/../kitty), never the deployed kitty config path — Pitfall-1 honesty applied to the python suite
+- [Phase 01]: 01-02: charset gate and compare-and-clear mutation-verified — removing either makes state-test.py fail
 
 ### Pending Todos
 
@@ -83,6 +86,6 @@ None yet.
 
 **Branch model:** WIP on `versioning` (main = stable); per-phase branches enabled: `gsd/phase-{phase}-{slug}` (worktrees on).
 
-Last session: 2026-06-12T08:42:17.360Z
-Stopped at: Completed 01-01-PLAN.md
+Last session: 2026-06-12T08:47:46.695Z
+Stopped at: Completed 01-02-PLAN.md
 Resume file: None
