@@ -17,24 +17,24 @@ source /tmp/stail-fns.sh
 
 echo "== 1. _emit_trunk_session shape (count, class, tags, single focus) =="
 WORKSPACE="$HOME/JangLabs"
-s="$(_emit_trunk_session claude 3)"
+s="$(_emit_trunk_session synapse 3)"
 [ "$(printf '%s\n' "$s" | grep -c '^launch ')" -eq 3 ] && ok "N=3 emits 3 launch lines" || no "wrong launch count"
 [ "$(printf '%s\n' "$s" | grep -c '^focus$')" -eq 1 ] && ok "exactly one focus (the master pane)" || no "focus count wrong"
-printf '%s\n' "$s" | grep -qx 'os_window_class switchtail-claude' && ok "class is switchtail-claude (contract preserved)" || no "class wrong"
-[ "$(printf '%s\n' "$s" | grep -c -- '--var lab=claude --var kind=claude')" -eq 3 ] \
+printf '%s\n' "$s" | grep -qx 'os_window_class switchtail-synapse' && ok "class is switchtail-synapse (contract preserved)" || no "class wrong"
+[ "$(printf '%s\n' "$s" | grep -c -- '--var lab=synapse --var kind=claude')" -eq 3 ] \
   && ok "every pane carries the hold tags (--var lab/kind)" || no "panes missing hold tags"
-printf '%s\n' "$s" | grep -qx 'cd /home/jangmanj/JangLabs/claude' && ok "cd to the lab repo before the panes" || no "missing/wrong cd"
-printf '%s\n' "$s" | grep -q 'Claude 1' && printf '%s\n' "$s" | grep -q 'Claude 3' && ok "panes numbered 1..N in the title" || no "pane numbering wrong"
+printf '%s\n' "$s" | grep -qx 'cd /home/jangmanj/JangLabs/synapse' && ok "cd to the lab repo before the panes" || no "missing/wrong cd"
+printf '%s\n' "$s" | grep -q 'Synapse 1' && printf '%s\n' "$s" | grep -q 'Synapse 3' && ok "panes numbered 1..N in the title" || no "pane numbering wrong"
 
 echo "== 2. N=1 is the degenerate single-pane case =="
-s1="$(_emit_trunk_session jangsjedi 1)"
+s1="$(_emit_trunk_session jangsjyro 1)"
 [ "$(printf '%s\n' "$s1" | grep -c '^launch ')" -eq 1 ] && ok "N=1 -> exactly one launch" || no "N=1 launch count wrong"
 [ "$(printf '%s\n' "$s1" | grep -c '^focus$')" -eq 1 ] && ok "N=1 still focuses its single pane" || no "N=1 focus missing"
 
 echo "== 3. honors SWITCHTAIL_LAYOUT for the transient session =="
-[ "$(SWITCHTAIL_LAYOUT=grid _emit_trunk_session claude 2 | grep '^layout ')" = 'layout grid' ] \
+[ "$(SWITCHTAIL_LAYOUT=grid _emit_trunk_session synapse 2 | grep '^layout ')" = 'layout grid' ] \
   && ok "layout follows SWITCHTAIL_LAYOUT" || no "layout not honored"
-[ "$(_emit_trunk_session claude 2 | grep '^layout ')" = 'layout tall' ] \
+[ "$(_emit_trunk_session synapse 2 | grep '^layout ')" = 'layout tall' ] \
   && ok "layout defaults to tall" || no "default layout wrong"
 
 # From here, stub the launcher + kdotool so nothing real spawns.
@@ -42,38 +42,38 @@ echo "== 4. cmd_trunk launches via the stdin-safe bash -c construction =="
 _launch_detached(){ printf '%s\n' "$*" >>/tmp/trunk-launch.log; }
 kdotool(){ :; }   # no windows up by default
 : > /tmp/trunk-launch.log
-( cmd_trunk claude 2 ) >/dev/null 2>&1
+( cmd_trunk synapse 2 ) >/dev/null 2>&1
 grep -q 'bash -c' /tmp/trunk-launch.log && ok "detached command is a bash -c (rebuilds the pipe in-tree)" || no "not launched via bash -c"
 grep -q 'kitty --session -' /tmp/trunk-launch.log && ok "kitty reads the session from STDIN (no temp file)" || no "kitty --session - missing"
-grep -q 'Claude 2' /tmp/trunk-launch.log && ok "the session text reaches the launcher as an argv" || no "session not passed as argv"
+grep -q 'Synapse 2' /tmp/trunk-launch.log && ok "the session text reaches the launcher as an argv" || no "session not passed as argv"
 
 echo "== 5. default count is 1 =="
-: > /tmp/trunk-launch.log; ( cmd_trunk claude ) >/dev/null 2>&1
-grep -q 'Claude 1' /tmp/trunk-launch.log && ! grep -q 'Claude 2' /tmp/trunk-launch.log \
+: > /tmp/trunk-launch.log; ( cmd_trunk synapse ) >/dev/null 2>&1
+grep -q 'Synapse 1' /tmp/trunk-launch.log && ! grep -q 'Synapse 2' /tmp/trunk-launch.log \
   && ok "no count -> a single pane" || no "default count not 1"
 
 echo "== 6. count clamped to SWITCHTAIL_TRUNK_MAX (default 12) =="
 : > /tmp/trunk-launch.log
-warn="$( ( cmd_trunk claude 999 ) 2>&1 >/dev/null )"
+warn="$( ( cmd_trunk synapse 999 ) 2>&1 >/dev/null )"
 echo "$warn" | grep -qi 'clamp' && ok "warns when clamping" || no "no clamp warning"
-grep -q 'Claude 12' /tmp/trunk-launch.log && ! grep -q 'Claude 13' /tmp/trunk-launch.log \
+grep -q 'Synapse 12' /tmp/trunk-launch.log && ! grep -q 'Synapse 13' /tmp/trunk-launch.log \
   && ok "clamped to the default max of 12" || no "clamp to 12 failed"
 
 echo "== 7. SWITCHTAIL_TRUNK_MAX tunable honored =="
 : > /tmp/trunk-launch.log
-( SWITCHTAIL_TRUNK_MAX=3 cmd_trunk claude 10 ) >/dev/null 2>&1
-grep -q 'Claude 3' /tmp/trunk-launch.log && ! grep -q 'Claude 4' /tmp/trunk-launch.log \
+( SWITCHTAIL_TRUNK_MAX=3 cmd_trunk synapse 10 ) >/dev/null 2>&1
+grep -q 'Synapse 3' /tmp/trunk-launch.log && ! grep -q 'Synapse 4' /tmp/trunk-launch.log \
   && ok "TRUNK_MAX=3 clamps a request for 10 down to 3" || no "env max not honored"
 # a garbage TRUNK_MAX falls back to 12, never disables the clamp
 : > /tmp/trunk-launch.log
-( SWITCHTAIL_TRUNK_MAX=banana cmd_trunk claude 999 ) >/dev/null 2>&1
-grep -q 'Claude 12' /tmp/trunk-launch.log && ! grep -q 'Claude 13' /tmp/trunk-launch.log \
+( SWITCHTAIL_TRUNK_MAX=banana cmd_trunk synapse 999 ) >/dev/null 2>&1
+grep -q 'Synapse 12' /tmp/trunk-launch.log && ! grep -q 'Synapse 13' /tmp/trunk-launch.log \
   && ok "non-numeric TRUNK_MAX falls back to 12 (clamp never disabled)" || no "garbage TRUNK_MAX broke the clamp"
 
 echo "== 8. count validation: rejects non-integer / zero / negative =="
-( cmd_trunk claude abc ) >/dev/null 2>&1; [ $? -eq 2 ] && ok "non-integer count -> exit 2" || no "non-integer not rejected"
-( cmd_trunk claude 0 )   >/dev/null 2>&1; [ $? -eq 2 ] && ok "zero count -> exit 2" || no "zero not rejected"
-( cmd_trunk claude -1 )  >/dev/null 2>&1; [ $? -eq 2 ] && ok "negative count -> exit 2 (not parsed as a flag)" || no "negative not rejected"
+( cmd_trunk synapse abc ) >/dev/null 2>&1; [ $? -eq 2 ] && ok "non-integer count -> exit 2" || no "non-integer not rejected"
+( cmd_trunk synapse 0 )   >/dev/null 2>&1; [ $? -eq 2 ] && ok "zero count -> exit 2" || no "zero not rejected"
+( cmd_trunk synapse -1 )  >/dev/null 2>&1; [ $? -eq 2 ] && ok "negative count -> exit 2 (not parsed as a flag)" || no "negative not rejected"
 
 echo "== 9. lab-name validation + missing-dir guard (no launch on either) =="
 : > /tmp/trunk-launch.log
@@ -85,9 +85,9 @@ echo "== 9. lab-name validation + missing-dir guard (no launch on either) =="
 [ ! -s /tmp/trunk-launch.log ] && ok "no window of broken panes opened" || no "launched into a missing dir"
 
 echo "== 10. already-up warning (second trunk shares the class) =="
-# stub kdotool so a 'claude' window appears to exist
-kdotool(){ case "$*" in "search --class ^switchtail-claude$") echo '{existing}';; *) :;; esac; }
-warn="$( ( cmd_trunk claude 1 ) 2>&1 >/dev/null )"
+# stub kdotool so a 'synapse' window appears to exist
+kdotool(){ case "$*" in "search --class ^switchtail-synapse$") echo '{existing}';; *) :;; esac; }
+warn="$( ( cmd_trunk synapse 1 ) 2>&1 >/dev/null )"
 echo "$warn" | grep -qi 'already up' && ok "warns that a second same-class window is opening" || no "no already-up warning"
 
 echo; echo "RESULT: $pass passed, $fail failed"

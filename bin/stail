@@ -97,11 +97,10 @@ _class_re() {  # $1=lab -> echo ^switchtail-<escaped-lab>$
 # ---------- shared: human display name for a lab/slug (PascalCase) ----------
 # The widget heading, the list, and every tab/pane title show this. Lab dirs are lowercase, so
 # a plain Titlecase (first letter up) is the fallback; a few names carry an INTERNAL capital that
-# can't be inferred from the lowercase dir (jangsjedi -> JangsJedi), so those are mapped explicitly.
+# can't be inferred from the lowercase dir (jangsjyro -> JangsJyro), so those are mapped explicitly.
 # The single source of truth — change a display name here, not at each call site.
 _display_name() {  # $1=lab/slug -> echo its PascalCase display name
   case "$1" in
-    jangsjedi)  printf 'JangsJedi' ;;
     jangsjyro)  printf 'JangsJyro' ;;
     switchtail) printf 'SwitchTail' ;;   # SwitchTail develops itself as a lab (inner cap can't be inferred)
     exchange)   printf 'Exchange' ;;     # the all-labs aggregate board

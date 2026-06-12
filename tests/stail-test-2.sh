@@ -51,7 +51,7 @@ echo "-- B1. running-set: standalone agent + exchange up --"
 STUB_CLASSES=(switchtail-agent switchtail-exchange)
 run="$(_running_labs | sort -u | tr '\n' ' ')"
 echo "  running set: $run"
-for l in agent exchange claude jangsjedi jangsjyro proton; do
+for l in agent exchange jangsjyro proton switchtail synapse; do
   echo "$run" | grep -qw "$l" || { no "running set missing $l"; }; done
 echo "$run" | grep -qw proton && echo "$run" | grep -qw exchange && ok "exchange-union expands aggregate to every pane (#2)" || no "exchange-union failed"
 
@@ -65,10 +65,10 @@ STUB_CLASSES=()
 j="$(cmd_list --json)"; jsonok "$j" && ok "empty-state list --json valid" || no "empty list invalid"
 echo "$j" | grep -q '"running":true' && no "something shows running with no windows" || ok "all labs down when nothing up"
 
-echo "-- B4. list --json one standalone (claude), no exchange: only claude up --"
-STUB_CLASSES=(switchtail-claude)
+echo "-- B4. list --json one standalone (synapse), no exchange: only synapse up --"
+STUB_CLASSES=(switchtail-synapse)
 j="$(cmd_list --json)"
-echo "$j" | grep -q '"lab":"claude","display":"Claude","running":true' && ok "claude running" || no "claude not running"
+echo "$j" | grep -q '"lab":"synapse","display":"Synapse","running":true' && ok "synapse running" || no "synapse not running"
 echo "$j" | grep -q '"lab":"proton","display":"Proton","running":false' && ok "proton correctly down (no false all-union)" || no "proton wrongly running"
 
 echo "-- B5. active --json on a board + off it --"

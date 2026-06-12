@@ -16,7 +16,7 @@ source /tmp/stail-fns.sh
 echo "== 1. real generate (5 labs, no warnings expected) =="
 stail() { command "$STAIL_BIN" "$@"; }
 out="$(command "$STAIL_BIN" generate 2>&1)"; echo "  $out"
-echo "$out" | grep -q 'agent claude jangsjedi jangsjyro proton' && ok "generate lists the 5 labs" || no "generate lab set unexpected"
+echo "$out" | grep -q 'agent jangsjyro proton switchtail synapse' && ok "generate lists the 5 labs" || no "generate lab set unexpected"
 
 echo "== 2. name validation (#6/#7): isolated SWITCHTAIL_DIR workspace =="
 ws=/tmp/stail-test-ws; rm -rf "$ws"; mkdir -p "$ws"
@@ -41,9 +41,9 @@ echo "== 3. _class_re (#5): anchored + metachar-escaped =="
 
 echo "== 3b. _display_name: PascalCase, explicit inner-cap overrides, Titlecase fallback =="
 [ "$(_display_name agent)"     = "Agent" ]     && ok "agent -> Agent" || no "agent: $(_display_name agent)"
-[ "$(_display_name claude)"    = "Claude" ]    && ok "claude -> Claude" || no "claude: $(_display_name claude)"
+[ "$(_display_name synapse)"   = "Synapse" ]   && ok "synapse -> Synapse" || no "synapse: $(_display_name synapse)"
 [ "$(_display_name proton)"    = "Proton" ]    && ok "proton -> Proton" || no "proton: $(_display_name proton)"
-[ "$(_display_name jangsjedi)" = "JangsJedi" ] && ok "jangsjedi -> JangsJedi (explicit inner cap)" || no "jangsjedi: $(_display_name jangsjedi)"
+[ "$(_display_name switchtail)" = "SwitchTail" ] && ok "switchtail -> SwitchTail (explicit inner cap)" || no "switchtail: $(_display_name switchtail)"
 [ "$(_display_name jangsjyro)" = "JangsJyro" ] && ok "jangsjyro -> JangsJyro (explicit inner cap)" || no "jangsjyro: $(_display_name jangsjyro)"
 [ "$(_display_name exchange)"  = "Exchange" ]  && ok "exchange -> Exchange" || no "exchange: $(_display_name exchange)"
 [ "$(_display_name my-app)"    = "My-app" ]    && ok "unknown -> Titlecase fallback" || no "fallback: $(_display_name my-app)"
