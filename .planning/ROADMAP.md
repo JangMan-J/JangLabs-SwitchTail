@@ -11,7 +11,7 @@ This milestone replaces SwitchTail's kitty foundation with a Zellij WASM plugin 
 - Integer phases (1, 2, 3): Planned milestone work
 - Decimal phases (2.1, 2.2): Urgent insertions (marked with INSERTED)
 
-- [ ] **Phase 1: Running-State Seam** - stail owns running state on the current kitty system; kdotool shrinks to raise/focus
+- [x] **Phase 1: Running-State Seam** - stail owns running state on the current kitty system; kdotool shrinks to raise/focus (completed 2026-06-12)
 - [ ] **Phase 2: Zellij Plugin Feasibility** - PoC plugin proves all four kitty roles have Zellij-era answers, incl. the launcher/introspector role and no-widget entry points; prior art assessed
 - [ ] **Phase 3: Core Lifecycle on Zellij** - board/line/trunk/patch/exchange with per-pane identity, driven by the kind table
 - [ ] **Phase 4: Hold/Resume on Zellij** - per-pane session-ID marker protocol, atomic claim, fleet-safe park and resume
@@ -40,7 +40,7 @@ Plans:
 - [x] 01-02-PLAN.md — kitty/state.py focus watcher + state.conf + kitty-stubbed unit suite
 - [x] 01-03-PLAN.md — Run-marker writers: _run_mark/_pane_alive, board stamping, cmd_line marker write, stail-test-6
 - [x] 01-04-PLAN.md — Readers re-sourced: list/active/trunk/switch off markers, test-2/3/4 rewrites, post-seam docs
-- [ ] 01-05-PLAN.md — Live deploy (symlinks, include, regen) + human-verified live checks (widget/A2/A3)
+- [x] 01-05-PLAN.md — Live deploy (symlinks, include, regen) + human-verified live checks (widget/A2/A3)
 
 ### Phase 2: Zellij Plugin Feasibility
 
@@ -124,7 +124,7 @@ Phases execute in numeric order: 1 → 2 → 3 → 4 → 5 → 6
 
 | Phase | Plans Complete | Status | Completed |
 |-------|----------------|--------|-----------|
-| 1. Running-State Seam | 4/5 | In Progress|  |
+| 1. Running-State Seam | 5/5 | Complete   | 2026-06-12 |
 | 2. Zellij Plugin Feasibility | 0/TBD | Not started | - |
 | 3. Core Lifecycle on Zellij | 0/TBD | Not started | - |
 | 4. Hold/Resume on Zellij | 0/TBD | Not started | - |
