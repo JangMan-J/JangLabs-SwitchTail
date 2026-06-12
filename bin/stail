@@ -19,9 +19,11 @@
 #
 # Window class stays switchtail-<lab> and the state dir stays switchtail — the verified
 # contract the Plasma widget, the .desktop StartupWMClass, and the hold kitten all key on.
-# active/list/switch introspect the live windows via kdotool by that class (the verified
-# handle; kitty exposes no pid through KWin, so window-class search is the reliable
-# signal, not pgrep).
+# Running detection reads stail-owned run markers $STATE/run/<lab>/<pid> (written by
+# `stail line` at pane boot; liveness = /proc/<pid> + start-time, the PID-reuse guard),
+# and the focused board comes from $STATE/active (written by the kitty/state.py focus
+# watcher). kdotool is consulted ONLY by `switch`, to raise/focus a board window by its
+# class — removing kdotool degrades raising, never listing.
 #
 # Tunables (env): SWITCHTAIL_DIR, SWITCHTAIL_INCLUDE_SHELL (1|0), SWITCHTAIL_LAYOUT (tall|fat|grid|...),
 #   SWITCHTAIL_TRUNK_MAX (upper bound for `trunk`'s line count; default 12),
@@ -182,7 +184,7 @@ _lab_in_exchange() {  # $1=lab -> 0 iff the lab has a LIVE marker with board=exc
 
 _need_kdotool() {  # $1=subcommand name, for the error message
   command -v kdotool >/dev/null 2>&1 || {
-    echo "stail $1: kdotool not found — install it (paru -S kdotool); needed for window introspection" >&2
+    echo "stail $1: kdotool not found — install it (paru -S kdotool); needed to raise/focus board windows" >&2
     exit 3
   }
 }
@@ -711,7 +713,7 @@ cmd_active() {
 }
 
 # ---------- subcommand: list ----------
-# Every lab + whether a board window for it is currently up.
+# Every lab + whether its board is currently up — one $STATE/run marker scan, no kdotool.
 cmd_list() {
   local json=0 lab first=1 running
   [ "${1:-}" = "--json" ] && json=1

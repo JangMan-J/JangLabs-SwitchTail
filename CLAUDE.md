@@ -6,7 +6,7 @@
 
 SwitchTail: a one-handed agent switchboard for kitty terminal sessions (see
 `README.md`). Five surfaces — CLI (`bin/stail`), kitty kittens + confs
-(`kitty/`: hold, swap, tail watcher, keys), a Plasma 6 widget
+(`kitty/`: hold, swap, tail watcher, state watcher, keys), a Plasma 6 widget
 (`plasmoid/org.switchtail.board`), systemd user units (`systemd/`), and the
 regression suite (`tests/`). Vocabulary is retro telephony: board (a lab's
 window), line (one agent pane), trunk (N lines, one lab), patch (assemble a
@@ -20,16 +20,22 @@ Six points must stay in lockstep or switch/hold/list silently degrade:
 2. Generated sessions set `os_window_class switchtail-<lab>`.
 3. Generated `.desktop` files set `StartupWMClass=switchtail-<lab>`.
 4. Kittens read the `--var lab=<lab>` identity var plus the table-derived `--var holdable=1` / `--var stylable=1` policy flags the CLI passes (never a kind literal).
-5. `kdotool` greps that class for running detection (`_running_labs` in `bin/stail`).
-6. The widget keys running state off the same class via `stail list --json`.
+5. Running detection reads stail-owned run markers `$STATE/run/<lab>/<pid>` written
+   by `stail line` at pane boot (liveness = `/proc/<pid>` + start-time match);
+   `kdotool` greps the class ONLY on the raise path (`stail switch`).
+6. The widget keys running state off `stail list --json` (shape unchanged; the data
+   behind it now derives from the run markers).
 
 A second 2-way contract: `stail line` mints a session id per agent pane
 (`--session-id`, stamped on the window as the `sid` user-var via OSC 1337); the
 hold kitten writes a per-pane marker `~/.local/state/switchtail/hold/<lab>/<sid>`;
 `stail line` claims one atomically (mv = first-wins, no race between concurrently
 booting trunk panes) and resumes that exact session via `--resume <sid>`. Legacy
-`<lab>.hold` flags still consume via `--continue`. Change the state-dir layout in
-stail and hold.py together or not at all.
+`<lab>.hold` flags still consume via `--continue`. The state dir also carries
+`run/<lab>/<pid>` markers (written by `stail line` pre-exec, read + lazily reaped by
+list/active/switch) and `active` (written by the `kitty/state.py` focus watcher from
+the `--var board=` identity, read by `stail active`). Change the state-dir layout in
+`bin/stail`, `hold.py`, AND `state.py` together or not at all.
 
 ## Runtime placement rules
 
@@ -52,7 +58,7 @@ under the spawner's env from `/proc/<pid>/environ`.
 
 ## Verification gate
 
-`tests/run-all.sh` (147 assertions) is the functional ground truth — run it
+`tests/run-all.sh` (208 assertions) is the functional ground truth — run it
 green before any commit that touches `bin/stail`, the kittens, or the tests.
 QML changes are verified by redeploy + plasmashell restart + a clean
 `journalctl --user -u plasma-plasmashell` (no errors naming the applet).
