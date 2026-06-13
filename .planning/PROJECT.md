@@ -20,6 +20,37 @@ telephony vocabulary survives as the project's core domain language
 The operator can route, watch, and command a fleet of agentic terminal
 sessions one-handed, without ever losing the overview.
 
+## Current State
+
+**Shipped: v0.1 Switchboard Groundwork** (2026-06-13) — a pure-core /
+thin-adapter Zellij plugin with a live pane directory, one-press deck
+navigation, true positional seat swap, per-line patch-through messaging, a
+triageable call log, and a JSON pipe protocol, all behind the `HostIntent`
+seam. 34 core tests + no-kill guard green; UAT 9/9 (live-verified). Full
+archive: `milestones/v0.1-ROADMAP.md`.
+
+## Current Milestone: v0.2 Composing the Exchange
+
+**Goal:** Turn the read-only switchboard into a live composition surface — the
+operator spawns boards and lines from inside the plugin, building the exchange
+by hand the way Zellij itself grows a layout.
+
+**Target features:**
+- Compose verbs that spawn a **line** (on the current board) and a **board**,
+  live and immediate (press → it happens; no builder mode, no commit step).
+- **Parameterizable increment**: a bare verb acts in unit (1); a two-press bind
+  (instruction → value) acts in quantity (verb + count → N). "One pane or a
+  hundred depending which buttons you press."
+- **Default agent `claude`** staffs every spawned line unless a command is
+  specified; bare shell is the opt-out.
+
+**Out of scope (v0.2):** working directory / cwd per line (deferred — likely
+rides with agent-session wiring); interactive builder/preview; saved layouts.
+
+**Deferred to a later milestone:** wiring the hosted agent sessions so they push
+ring/status into the board themselves (mechanism deliberately open — NOT assumed
+to be Claude Code hooks). See `seeds/agent-session-wiring.md`.
+
 ## Context
 
 - Host: single CachyOS / KDE Plasma 6 / Wayland box; zellij 0.45.0 installed.
@@ -52,5 +83,29 @@ sessions one-handed, without ever losing the overview.
 | LOCKED (owner, 2026-06-12): fresh slate — retire kitty era entirely, rebuild as a Zellij plugin, window-manager groundwork first | Owner directive; incremental parity migration abandoned in favor of plugin-first groundwork | Done — purge commit `8199c94` |
 | LOCKED (owner, 2026-06-12): retro telephony vocabulary is the project's domain language, seeded into types/keys/docs | Owner directive ("seed it strongly") | Active |
 | Core/adapter split with `HostIntent` seam | Expandability + testability without a running Zellij | Active |
-| Pin zellij-tile 0.44.3, verify API from vendored source | docs.rs/web summaries proved unreliable; binary is 0.45.0 (compatible direction) | Done |
+| Pin zellij-tile 0.44.3, verify API from vendored source | docs.rs/web summaries proved unreliable; binary is 0.45.0 (compatible direction) | ✓ Good (v0.1) |
 | Minimal permission set, withhold RunCommands et al. | Convert kitty-era discipline-only safety into structural surface reduction | Active |
+| Selection anchored by stable identity, not row index | Row-index selection drifted under view re-sort (UAT gaps 4+6) | ✓ Good (v0.1, 04-05) |
+| Seat swap composed as a 3-call placeholder exchange | `replace_pane_with_existing_pane` is one-way, not a swap (proven at host commit e9173cb); no single swap primitive exists | ✓ Good (v0.1, 04-06) |
+| v0.2: live in-plugin composition (verb+count), not an up-front spec | Zellij-native press-and-it-happens feel; keeps v0.1's pure-core grain | Pending (v0.2) |
+| v0.2: default agent `claude`; cwd out of scope | Tool exists to bring up agents; cwd is a separable later concern | Pending (v0.2) |
+
+## Evolution
+
+This document evolves at phase transitions and milestone boundaries.
+
+**After each phase transition** (via `/gsd-transition`):
+1. Requirements invalidated? → Move to Out of Scope with reason
+2. Requirements validated? → Move to Validated with phase reference
+3. New requirements emerged? → Add to Active
+4. Decisions to log? → Add to Key Decisions
+5. "What This Is" still accurate? → Update if drifted
+
+**After each milestone** (via `/gsd-complete-milestone`):
+1. Full review of all sections
+2. Core Value check — still the right priority?
+3. Audit Out of Scope — reasons still valid?
+4. Update Context with current state
+
+---
+*Last updated: 2026-06-13 after v0.1 milestone (v0.2 Composing the Exchange started)*
