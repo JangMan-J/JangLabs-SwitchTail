@@ -3,7 +3,7 @@ gsd_state_version: 1.0
 milestone: v0.1
 milestone_name: Switchboard Groundwork
 status: milestone_complete
-last_updated: "2026-06-12"
+last_updated: "2026-06-13"
 progress:
   total_phases: 4
   completed_phases: 4
@@ -21,9 +21,17 @@ See: .planning/PROJECT.md (created 2026-06-12, fresh-slate restart)
 
 ## Current Position
 
-Phase: 4 of 4 — ALL COMPLETE (2026-06-12, single autonomous session)
-Status: v0.1 Switchboard Groundwork delivered — 28 unit tests + no-kill
-guard green, wasm builds clean, headless E2E 8/8 strict, clippy clean.
+Phase: 4 of 4 — gap-closure in progress (2026-06-13 session)
+Status: v0.1 Switchboard Groundwork delivered. Phase-4 UAT (2026-06-12)
+found 7/9 pass + 2 major gaps (tests 4 swap, 6 ring targeting). Both gaps
+diagnosed to a shared root cause and fixed in plans 04-05 + 04-06:
+- 04-05 COMPLETE: selection re-anchored by stable identity (LineId /
+  call seq) — ring/cursor drift fixed. 34 core tests + no-kill guard green.
+- 04-06 Tasks 1-3 COMPLETE: SwapPanes composite intent (true positional
+  exchange via 3-call placeholder transaction); seat follows the position;
+  docs corrected. Owner blessed the placeholder close (Task 1: proceed).
+  wasm builds clean. Task 4 (live human-verify) PENDING — needs operator
+  in a live zellij session (`tools/dev.sh reload`, observe swap + ring).
 Mode: autonomous single-session (memory-constrained box — serial builds,
 CARGO_BUILD_JOBS=4, no agent fan-out, commit+push frequently)
 
@@ -44,9 +52,11 @@ CARGO_BUILD_JOBS=4, no agent fan-out, commit+push frequently)
 
 - Context7 monthly quota exhausted (2026-06-12) — `ctx7 login` for higher
   limits; using vendored source + upstream docs instead.
-- `replace_pane_with_existing_pane` swap: shipped with suppress=true (the
-  displaced pane stays alive & recoverable via focus). True positional swap
-  semantics still unconfirmed empirically — refine in a live-driving session.
+- Seat swap: RESOLVED in code (04-06). `replace_pane_with_existing_pane` is
+  a one-way "bring pane here" primitive (NOT a swap) — proven at host commit
+  e9173cb. True positional exchange now composed as a 3-call placeholder
+  transaction (SwapPanes intent). PENDING live human-verify (Task 4): FIFO
+  ordering + suppressed-restore edge cannot be asserted headlessly.
 - This terminal was OOM-killed once mid-run; keep builds capped and avoid
   parallel heavy processes.
 - Release wasm builds (lto=true, codegen-units=1) SIGSEGV rustc on this box
