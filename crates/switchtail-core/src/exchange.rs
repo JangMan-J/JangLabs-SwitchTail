@@ -1241,4 +1241,97 @@ mod tests {
         assert_eq!(ex.agent_command, vec!["claude".to_string()]);
         assert_eq!(ex.lines_per_board, 5);
     }
+
+    // --- COMP-10: CB-safe deck-cap warning ---
+
+    #[test]
+    fn deck_cap_warning_absent_when_spawn_within_capacity() {
+        // Empty exchange: 10 free slots. Spawning 5 (default) → no warning.
+        let mut ex = Exchange::default();
+        ex.compose_board_key = KeyBinding { ch: 'b', shift: true, super_: false };
+        let shift_b = KeyInput::new(BareKey::Char('b'), true, false);
+        ex.key(shift_b);
+        let info_warnings: Vec<_> = ex
+            .log
+            .calls()
+            .iter()
+            .filter(|c| {
+                matches!(c.kind, CallKind::Info)
+                    && c.note.contains("deck key")
+            })
+            .collect();
+        assert!(
+            info_warnings.is_empty(),
+            "no deck-cap warning expected when spawn fits in capacity"
+        );
+    }
+
+    #[test]
+    fn deck_cap_warning_fires_once_on_overflow() {
+        // Fill 9 of 10 deck slots, then spawn 5 → 4 overflow.
+        let panes: Vec<PaneSnapshot> = (1u32..=9).map(|i| pane(i, "x")).collect();
+        let mut ex = exchange_with(panes);
+        // 9 slots used, 1 remaining; spawning 5 → 4 overflow.
+        ex.compose_board_key = KeyBinding { ch: 'b', shift: true, super_: false };
+        let shift_b = KeyInput::new(BareKey::Char('b'), true, false);
+        ex.key(shift_b);
+        let overflow_warnings: Vec<_> = ex
+            .log
+            .calls()
+            .iter()
+            .filter(|c| {
+                matches!(c.kind, CallKind::Info)
+                    && c.note.contains("deck key")
+            })
+            .collect();
+        assert_eq!(
+            overflow_warnings.len(),
+            1,
+            "exactly one deck-cap warning expected on overflow"
+        );
+        let note = &overflow_warnings[0].note;
+        assert!(
+            note.contains("4"),
+            "warning must name the 4 overflow lines; got: {note}"
+        );
+        assert!(
+            note.contains("10"),
+            "warning must name the deck capacity (10); got: {note}"
+        );
+        // The fan-out still has lines_per_board (5) intents — none dropped.
+        // Verify by counting: we need a separate key press to get the intents.
+        let mut ex2 = exchange_with((1u32..=9).map(|i| pane(i, "x")).collect());
+        ex2.compose_board_key = KeyBinding { ch: 'b', shift: true, super_: false };
+        let intents = ex2.key(KeyInput::new(BareKey::Char('b'), true, false));
+        assert_eq!(
+            intents.len(),
+            5,
+            "all 5 lines must still spawn on overflow (no line dropped)"
+        );
+    }
+
+    #[test]
+    fn deck_cap_warning_is_info_not_ringing() {
+        // The warning must be ambient (Info = already-answered), never ringing.
+        let panes: Vec<PaneSnapshot> = (1u32..=10).map(|i| pane(i, "x")).collect();
+        let mut ex = exchange_with(panes);
+        // All 10 slots used, spawn 5 → all 5 overflow.
+        ex.compose_board_key = KeyBinding { ch: 'b', shift: true, super_: false };
+        ex.key(KeyInput::new(BareKey::Char('b'), true, false));
+        let overflow_warnings: Vec<_> = ex
+            .log
+            .calls()
+            .iter()
+            .filter(|c| {
+                matches!(c.kind, CallKind::Info)
+                    && c.note.contains("deck key")
+            })
+            .collect();
+        assert_eq!(overflow_warnings.len(), 1, "one warning for fully-full deck");
+        // Info kind does NOT ring (CallKind::rings() returns false for Info).
+        assert!(
+            !overflow_warnings[0].kind.rings(),
+            "deck-cap warning must be Info (non-ringing), not a ringing call"
+        );
+    }
 }
