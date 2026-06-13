@@ -183,6 +183,11 @@ impl State {
                         open_command_pane(cmd, BTreeMap::new());
                     }
                 }
+                HostIntent::SpawnBoard { .. } => {
+                    // 01-03 wires the open_command_pane_in_new_tab shim here.
+                    // Stub: no-op for now so the adapter compiles while 01-02
+                    // defines the intent. The actual dispatch is plan 01-03's job.
+                }
                 HostIntent::PipeReply { pipe, body } => {
                     cli_pipe_output(&pipe, &body);
                 }
