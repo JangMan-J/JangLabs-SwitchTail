@@ -234,6 +234,36 @@ impl Exchange {
         }
     }
 
+    /// Surface an immediate command exit reported by the host `CommandPaneExited`
+    /// event. Places a `LineExited` call-log entry for ANY exit status (flagging
+    /// 127 specially as "command not found?"). The line is RETAINED — never
+    /// removed, never killed. Returns attention intents from `refresh_ring_flags`
+    /// (LineExited rings, drawing operator attention). Unknown line → no-op.
+    ///
+    /// COMP-11 (core half). The adapter subscription + routing is 01-03's job.
+    /// Do NOT conflate with the "arrived already exited in ingest_panes" path —
+    /// that v0.1 path stays as-is; this is the event-driven immediate-exit surface.
+    pub fn note_command_exit(
+        &mut self,
+        line: LineId,
+        status: Option<i32>,
+    ) -> Vec<HostIntent> {
+        if !self.lines.contains_key(&line) {
+            return vec![];
+        }
+        let note = match status {
+            Some(127) => format!(
+                "line {} exited: exit 127 — command not found?",
+                line.0
+            ),
+            Some(s) => format!("line {} exited: status {}", line.0, s),
+            None => format!("line {} exited: status unknown", line.0),
+        };
+        self.log.place(Some(line), CallKind::LineExited, note);
+        self.refresh_ring_flags();
+        self.attention_intents()
+    }
+
     // ---------- operator keys (plugin UI → model) ----------
 
     pub fn key(&mut self, key: KeyInput) -> Vec<HostIntent> {
