@@ -1090,4 +1090,81 @@ mod tests {
             "deck digit '1' must still focus the line, not be captured by compose branch"
         );
     }
+
+    // --- COMP-01/02/03: compose-verb board-spawn fan-out ---
+
+    #[test]
+    fn compose_verb_emits_spawnboard_plus_openlines_default() {
+        // Default: agent_command=["claude"], lines_per_board=5
+        let mut ex = exchange_with(vec![pane(1, "a")]);
+        let shift_b = KeyInput::new(BareKey::Char('b'), true, false);
+        let intents = ex.key(shift_b);
+        // Should emit [SpawnBoard{["claude"]}, OpenLine{["claude"]}×4] = 5 intents
+        assert_eq!(intents.len(), 5, "expected 5 intents (SpawnBoard + 4 OpenLine)");
+        assert_eq!(
+            intents[0],
+            HostIntent::SpawnBoard { command: vec!["claude".to_string()] }
+        );
+        for i in 1..5 {
+            assert_eq!(
+                intents[i],
+                HostIntent::OpenLine { command: vec!["claude".to_string()], cwd: None },
+                "intent {} should be OpenLine",
+                i
+            );
+        }
+    }
+
+    #[test]
+    fn compose_verb_uses_configured_agent_command_and_lines_per_board() {
+        let mut ex = Exchange::default();
+        ex.agent_command = vec!["my-agent".to_string(), "--flag".to_string()];
+        ex.lines_per_board = 3;
+        ex.compose_board_key = KeyBinding { ch: 'b', shift: true, super_: false };
+        let shift_b = KeyInput::new(BareKey::Char('b'), true, false);
+        let intents = ex.key(shift_b);
+        assert_eq!(intents.len(), 3, "expected 3 intents for lines_per_board=3");
+        assert_eq!(
+            intents[0],
+            HostIntent::SpawnBoard { command: vec!["my-agent".to_string(), "--flag".to_string()] }
+        );
+        for i in 1..3 {
+            assert_eq!(
+                intents[i],
+                HostIntent::OpenLine {
+                    command: vec!["my-agent".to_string(), "--flag".to_string()],
+                    cwd: None
+                }
+            );
+        }
+    }
+
+    #[test]
+    fn compose_verb_lines_per_board_1_yields_only_spawnboard() {
+        let mut ex = Exchange::default();
+        ex.lines_per_board = 1;
+        ex.compose_board_key = KeyBinding { ch: 'b', shift: true, super_: false };
+        let shift_b = KeyInput::new(BareKey::Char('b'), true, false);
+        let intents = ex.key(shift_b);
+        assert_eq!(intents.len(), 1, "k=1 yields exactly [SpawnBoard]");
+        assert!(matches!(intents[0], HostIntent::SpawnBoard { .. }));
+    }
+
+    #[test]
+    fn n_key_still_opens_line_with_line_command_unchanged() {
+        let mut ex = Exchange::default();
+        ex.line_command = vec!["bash".to_string()];
+        let intents = ex.key(KeyInput::ch('n'));
+        assert_eq!(
+            intents,
+            vec![HostIntent::OpenLine { command: vec!["bash".to_string()], cwd: None }]
+        );
+    }
+
+    #[test]
+    fn exchange_default_agent_command_and_lines_per_board() {
+        let ex = Exchange::default();
+        assert_eq!(ex.agent_command, vec!["claude".to_string()]);
+        assert_eq!(ex.lines_per_board, 5);
+    }
 }
