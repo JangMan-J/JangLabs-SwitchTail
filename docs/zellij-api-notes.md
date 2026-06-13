@@ -158,8 +158,13 @@ output (handy tracing channel).
      suppressed (still addressable).
   3. `replace_pane_with_existing_pane(P, A, false)` → A takes P's slot
      (= B's original slot); plugin-owned P closes.
-  The three plugin commands process in dispatch order (FIFO). [Live FIFO +
-  suppressed-restore findings to be appended after 04-06 Task 4.]
+  **Live-verified (2026-06-13, 04-06 Task 4):** the three plugin commands
+  process in dispatch order (FIFO) — the end state is the exact positional
+  exchange, layout otherwise unchanged, both panes visible, no leftover
+  placeholder. The step-1 "restore replaced pane when the new pane closes"
+  relationship does NOT yank A or B back out of place when P closes
+  (suppressed-restore edge is benign). Repeatable across chained swaps with
+  no degradation; zellij.log clean (no panics).
 - **`move_pane_with_pane_id_in_direction(pane_id, direction)` IS a true
   positional swap**, but only with the adjacent pane in the given direction —
   a cheaper shortcut for the adjacent common case (deferred; needs geometry

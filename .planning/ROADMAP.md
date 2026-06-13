@@ -48,6 +48,14 @@ pure and every future capability a small follow-on. Facts in
   2. `tests/e2e.sh` runs a scripted zellij session headlessly and asserts plugin load + pipe round-trip via dump-screen/pipe output
   3. No-kill test guards the adapter; review findings fixed or recorded
 
+**UAT (2026-06-12 → closed 2026-06-13)**: live UAT found 7/9 pass + 2 major
+gaps sharing a root cause (selection stored as a drifting row index):
+test 6 (ring mistargeted under RingingFirst re-sort) and test 4 (seat swap
+was not a true positional exchange). Closed in gap-closure plans 04-05
+(identity-anchored selection) and 04-06 (composed 3-call positional swap;
+`replace_pane_with_existing_pane` proven one-way, not a swap). Re-verified
+live — Phase-4 UAT now 9/9. See 04-05-SUMMARY.md, 04-06-SUMMARY.md.
+
 ## Progress
 
 | Phase | Status | Completed |

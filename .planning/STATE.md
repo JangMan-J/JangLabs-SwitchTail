@@ -21,17 +21,18 @@ See: .planning/PROJECT.md (created 2026-06-12, fresh-slate restart)
 
 ## Current Position
 
-Phase: 4 of 4 — gap-closure in progress (2026-06-13 session)
-Status: v0.1 Switchboard Groundwork delivered. Phase-4 UAT (2026-06-12)
-found 7/9 pass + 2 major gaps (tests 4 swap, 6 ring targeting). Both gaps
-diagnosed to a shared root cause and fixed in plans 04-05 + 04-06:
+Phase: 4 of 4 — ALL COMPLETE, gap-closure done (2026-06-13)
+Status: v0.1 Switchboard Groundwork delivered + Phase-4 UAT now 9/9.
+The two major UAT gaps (tests 4 swap, 6 ring targeting) shared a root
+cause (selection stored as a drifting row index) and are both closed:
 - 04-05 COMPLETE: selection re-anchored by stable identity (LineId /
-  call seq) — ring/cursor drift fixed. 34 core tests + no-kill guard green.
-- 04-06 Tasks 1-3 COMPLETE: SwapPanes composite intent (true positional
-  exchange via 3-call placeholder transaction); seat follows the position;
-  docs corrected. Owner blessed the placeholder close (Task 1: proceed).
-  wasm builds clean. Task 4 (live human-verify) PENDING — needs operator
-  in a live zellij session (`tools/dev.sh reload`, observe swap + ring).
+  call seq) — ring/cursor drift fixed. Live-verified.
+- 04-06 COMPLETE: SwapPanes composite intent — true positional exchange
+  via a 3-call placeholder transaction; seat follows the position; docs
+  corrected. Owner blessed the placeholder close. Live-verified 2026-06-13
+  (positional swap exact, FIFO ordering, suppressed-restore benign,
+  repeatable, log clean).
+34 core tests + no-kill guard green; wasm builds clean.
 Mode: autonomous single-session (memory-constrained box — serial builds,
 CARGO_BUILD_JOBS=4, no agent fan-out, commit+push frequently)
 
@@ -52,11 +53,12 @@ CARGO_BUILD_JOBS=4, no agent fan-out, commit+push frequently)
 
 - Context7 monthly quota exhausted (2026-06-12) — `ctx7 login` for higher
   limits; using vendored source + upstream docs instead.
-- Seat swap: RESOLVED in code (04-06). `replace_pane_with_existing_pane` is
-  a one-way "bring pane here" primitive (NOT a swap) — proven at host commit
-  e9173cb. True positional exchange now composed as a 3-call placeholder
-  transaction (SwapPanes intent). PENDING live human-verify (Task 4): FIFO
-  ordering + suppressed-restore edge cannot be asserted headlessly.
+- Seat swap: RESOLVED (04-06, live-verified 2026-06-13).
+  `replace_pane_with_existing_pane` is a one-way "bring pane here" primitive
+  (NOT a swap) — proven at host commit e9173cb. True positional exchange now
+  composed as a 3-call placeholder transaction (SwapPanes intent). Live E2E
+  confirmed: exact exchange, FIFO ordering, suppressed-restore edge benign,
+  repeatable, log clean.
 - This terminal was OOM-killed once mid-run; keep builds capped and avoid
   parallel heavy processes.
 - Release wasm builds (lto=true, codegen-units=1) SIGSEGV rustc on this box

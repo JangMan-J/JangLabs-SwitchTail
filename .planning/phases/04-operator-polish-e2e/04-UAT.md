@@ -26,9 +26,8 @@ result: pass
 
 ### 4. Seat mark + swap (live semantics check)
 expected: "`m` marks the selected line as the seat. Selecting another line and pressing `s` swaps it into the seat position. The displaced line stays alive and is recoverable via focus (shipped with suppress=true). NOTE: true positional-swap semantics were never confirmed live — observe exactly where both panes end up."
-result: issue
-reported: "the swap should case both windows to exchange their positions precisely so that the layout remains the same but the terminals have traded places"
-severity: major
+result: pass
+resolved: "Fixed in 04-06 (composed 3-call positional exchange). Live-verified 2026-06-13: panes trade places exactly, layout unchanged, no residue, repeatable, log clean. Seat marker follows the position."
 
 ### 5. Patch a message to a line
 expected: "`i` opens the message prompt; typing text and pressing Enter delivers it into the target line's terminal (visible as typed input there)."
@@ -36,9 +35,8 @@ result: pass
 
 ### 6. Ring surface is CB-safe; answer/park clears it
 expected: "`R` rings the selected line: the target pane gets an amber tint + highlight (blue↔amber semantics, no red/green meaning). `a` (answer) or `p` (park) clears the ring surface."
-result: issue
-reported: "it is not consistently selecting the correct window/terminal for this feature, perhaps related to the swap function issue from earlier in my testing session"
-severity: major
+result: pass
+resolved: "Fixed in 04-05 (identity-anchored selection). Live-verified 2026-06-13: R lands amber on the operator's selected line, cursor stays glued through the RingingFirst re-sort, a clears it to zero ringing lines. Pipe ring/list round-trip confirmed."
 
 ### 7. Call log + sort cycling
 expected: "`Tab` toggles directory ⇄ call log; events from the session (rings, status changes, says) appear in the log with triage states. `o` cycles sort: deck · ringing-first · board."
@@ -56,16 +54,21 @@ result: pass
 ## Summary
 
 total: 9
-passed: 7
-issues: 2
+passed: 9
+issues: 0
 pending: 0
 skipped: 0
+note: "Initial UAT 2026-06-12 found 7 pass + 2 major gaps (tests 4, 6).
+Both diagnosed to a shared root cause (drifting selection index) and fixed
+in 04-05 + 04-06; re-verified live 2026-06-13 — all 9 pass."
 
 ## Gaps
 
 ```yaml
 - truth: "Seat swap is a true positional exchange: the two panes trade places precisely, overall layout unchanged"
-  status: failed
+  status: resolved
+  resolved_in: 04-06
+  resolved_date: "2026-06-13"
   reason: "User reported: the swap should case both windows to exchange their positions precisely so that the layout remains the same but the terminals have traded places"
   severity: major
   test: 4
@@ -83,7 +86,9 @@ skipped: 0
     - "Must be E2E-verified live: FIFO ordering + suppressed-restore edge when P closes"
   debug_session: .planning/debug/seat-swap-not-positional.md
 - truth: "Ring (`R`) surfaces the amber tint + highlight on the line the operator actually selected, consistently"
-  status: failed
+  status: resolved
+  resolved_in: 04-05
+  resolved_date: "2026-06-13"
   reason: "User reported: it is not consistently selecting the correct window/terminal for this feature, perhaps related to the swap function issue from earlier in my testing session"
   severity: major
   test: 6
