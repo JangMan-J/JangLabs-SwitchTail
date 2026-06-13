@@ -1334,4 +1334,201 @@ mod tests {
             "deck-cap warning must be Info (non-ringing), not a ringing call"
         );
     }
+
+    // --- COMP-11: note_command_exit (core half) ---
+
+    #[test]
+    fn note_command_exit_exit127_places_lineexited_entry_retains_line_no_kill() {
+        let mut ex = exchange_with(vec![pane(5, "agent")]);
+        let intents = ex.note_command_exit(LineId(5), Some(127));
+        // Line is RETAINED
+        assert!(
+            ex.lines().any(|l| l.id == LineId(5)),
+            "line must be retained after note_command_exit"
+        );
+        // No close/kill intent
+        assert!(
+            !intents.iter().any(|i| matches!(
+                i,
+                HostIntent::FocusLine(_) // proxy: no close/kill exists in enum
+            )),
+            "note_command_exit must not return close/kill intents"
+        );
+        // A LineExited entry was placed
+        let exited_entries: Vec<_> = ex
+            .log
+            .calls()
+            .iter()
+            .filter(|c| matches!(c.kind, CallKind::LineExited) && c.line == Some(LineId(5)))
+            .collect();
+        assert_eq!(
+            exited_entries.len(),
+            1,
+            "exactly one LineExited entry expected"
+        );
+        // 127 is flagged specially in the note
+        assert!(
+            exited_entries[0].note.contains("127"),
+            "exit 127 must be mentioned in the note; got: {}",
+            exited_entries[0].note
+        );
+        assert!(
+            exited_entries[0].note.contains("command not found"),
+            "exit 127 note must hint at command-not-found; got: {}",
+            exited_entries[0].note
+        );
+    }
+
+    #[test]
+    fn note_command_exit_status0_also_places_lineexited() {
+        // Any exit status (including 0) produces a LineExited entry — not gated on 127.
+        let mut ex = exchange_with(vec![pane(7, "agent")]);
+        let intents = ex.note_command_exit(LineId(7), Some(0));
+        assert!(ex.lines().any(|l| l.id == LineId(7)), "line retained");
+        let exited_entries: Vec<_> = ex
+            .log
+            .calls()
+            .iter()
+            .filter(|c| matches!(c.kind, CallKind::LineExited) && c.line == Some(LineId(7)))
+            .collect();
+        assert_eq!(exited_entries.len(), 1, "LineExited placed for status=0");
+        // Should NOT contain the 127-specific hint
+        assert!(
+            !exited_entries[0].note.contains("command not found"),
+            "status=0 must not include the 127-specific hint"
+        );
+        // No kill intent
+        let _ = intents; // just call it; the returned Vec contains only attention intents
+    }
+
+    #[test]
+    fn note_command_exit_none_status_places_lineexited() {
+        let mut ex = exchange_with(vec![pane(8, "agent")]);
+        ex.note_command_exit(LineId(8), None);
+        let exited_entries: Vec<_> = ex
+            .log
+            .calls()
+            .iter()
+            .filter(|c| matches!(c.kind, CallKind::LineExited) && c.line == Some(LineId(8)))
+            .collect();
+        assert_eq!(exited_entries.len(), 1, "LineExited placed for None status");
+    }
+
+    #[test]
+    fn note_command_exit_unknown_line_is_noop() {
+        let mut ex = exchange_with(vec![pane(1, "a")]);
+        let intents = ex.note_command_exit(LineId(999), Some(0));
+        assert!(intents.is_empty(), "unknown line → no-op (no intents)");
+        let exited_entries: Vec<_> = ex
+            .log
+            .calls()
+            .iter()
+            .filter(|c| matches!(c.kind, CallKind::LineExited))
+            .collect();
+        assert!(exited_entries.is_empty(), "unknown line → no log entry");
+    }
+
+    // --- COMP-12: async board-fill selection no-drift regression ---
+
+    #[test]
+    fn spawn_board_fill_selection_does_not_drift() {
+        // Start with 2 pre-existing lines on board 0.
+        let mut ex = exchange_with(vec![pane(1, "a"), pane(2, "b")]);
+        // Navigate to select line 2 by identity.
+        ex.key(KeyInput::key(BareKey::Down));
+        assert_eq!(
+            ex.selected_line(),
+            Some(LineId(2)),
+            "initial selection should be line 2"
+        );
+
+        // Helper: create a pane on board 1.
+        let on_board1 = |id: u32, t: &str| {
+            let mut p = pane(id, t);
+            p.board = 1;
+            p
+        };
+
+        // Simulate the async board-fill burst: sequential ingest_panes calls
+        // each adding 1-2 new lines on board 1 (the newly spawned board).
+        // Assert selected_line() == LineId(2) after EACH ingest (no drift).
+
+        // Fill #1: one new line appears
+        ex.ingest_panes(vec![pane(1, "a"), pane(2, "b"), on_board1(10, "c1")]);
+        assert_eq!(
+            ex.selected_line(),
+            Some(LineId(2)),
+            "drift after fill #1"
+        );
+
+        // Fill #2: second new line
+        ex.ingest_panes(vec![
+            pane(1, "a"),
+            pane(2, "b"),
+            on_board1(10, "c1"),
+            on_board1(11, "c2"),
+        ]);
+        assert_eq!(
+            ex.selected_line(),
+            Some(LineId(2)),
+            "drift after fill #2"
+        );
+
+        // Fill #3: third new line
+        ex.ingest_panes(vec![
+            pane(1, "a"),
+            pane(2, "b"),
+            on_board1(10, "c1"),
+            on_board1(11, "c2"),
+            on_board1(12, "c3"),
+        ]);
+        assert_eq!(
+            ex.selected_line(),
+            Some(LineId(2)),
+            "drift after fill #3"
+        );
+
+        // Fill #4: fourth new line
+        ex.ingest_panes(vec![
+            pane(1, "a"),
+            pane(2, "b"),
+            on_board1(10, "c1"),
+            on_board1(11, "c2"),
+            on_board1(12, "c3"),
+            on_board1(13, "c4"),
+        ]);
+        assert_eq!(
+            ex.selected_line(),
+            Some(LineId(2)),
+            "drift after fill #4"
+        );
+
+        // Fill #5: fifth new line (full board of 5)
+        ex.ingest_panes(vec![
+            pane(1, "a"),
+            pane(2, "b"),
+            on_board1(10, "c1"),
+            on_board1(11, "c2"),
+            on_board1(12, "c3"),
+            on_board1(13, "c4"),
+            on_board1(14, "c5"),
+        ]);
+        assert_eq!(
+            ex.selected_line(),
+            Some(LineId(2)),
+            "drift after fill #5 (all board-1 lines present)"
+        );
+
+        // All 5 new lines carry board == 1.
+        for id in 10u32..15 {
+            let line = ex.lines().find(|l| l.id == LineId(id)).unwrap_or_else(|| {
+                panic!("line {} should exist after full board fill", id)
+            });
+            assert_eq!(
+                line.board, 1,
+                "line {} should be on board 1, got board {}",
+                id, line.board
+            );
+        }
+    }
 }
