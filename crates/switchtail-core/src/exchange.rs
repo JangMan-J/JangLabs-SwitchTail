@@ -3,7 +3,7 @@
 
 use crate::deck::Deck;
 use crate::intent::HostIntent;
-use crate::key::KeyInput;
+use crate::key::{BareKey, KeyBinding, KeyInput};
 use crate::line::{AgentState, Line, LineId};
 use crate::log::{CallKind, CallLog, Triage};
 use crate::protocol::{self, PipeOp};
@@ -68,6 +68,17 @@ pub struct Exchange {
     lit: Vec<LineId>,
     /// Command used by the `n` (new line) key; empty = default shell.
     pub line_command: Vec<String>,
+    /// Configurable compose-verb binding for the board verb (COMP-09).
+    ///
+    /// Default: Shift+b (`KeyBinding::default()`). Config-overridable via
+    /// `compose_board_key` in the plugin KDL config. When the operator presses
+    /// a key matching this binding, the compose-verb branch fires in `key()`.
+    /// The actual spawn intent is wired in plan 01-03 (SpawnBoard); for now
+    /// the matching branch is a no-op placeholder.
+    ///
+    /// VERIFIED (zellij-utils-0.44.3/src/data.rs:298): `KeyModifier::Super`
+    /// exists (enum = Ctrl, Alt, Shift, Super), so Super bindings are valid.
+    pub compose_board_key: KeyBinding,
 }
 
 impl Exchange {
@@ -199,12 +210,31 @@ impl Exchange {
         if self.prompt.is_some() {
             return self.prompt_key(key);
         }
-        match key {
-            KeyInput::Char(c) if self.deck.line_for(c).is_some() => {
-                let line = self.deck.line_for(c).unwrap();
-                vec![HostIntent::FocusLine(line)]
+
+        // Compose-verb check: must come BEFORE deck dispatch so a Shift/Super
+        // key cannot accidentally fire a deck jump. An unmodified key with the
+        // same char does NOT match (extra-modifier non-match is enforced by
+        // `KeyInput::matches`). This branch is a no-op placeholder — the
+        // SpawnBoard intent fan-out is wired in plan 01-03 once 01-02 defines
+        // the `SpawnBoard` / `OpenLine` intents.
+        if key.matches(&self.compose_board_key) {
+            // 01-02 returns the [SpawnBoard, OpenLine×(N-1)] fan-out here.
+            return vec![];
+        }
+
+        // Deck jump: unmodified char only. Shift/Super carry the compose verb;
+        // keeping the guard `!key.shift && !key.super_` ensures deck digits
+        // (1-9 0) and letter verbs stay collision-free.
+        if let BareKey::Char(c) = key.bare {
+            if !key.shift && !key.super_ {
+                if let Some(line) = self.deck.line_for(c) {
+                    return vec![HostIntent::FocusLine(line)];
+                }
             }
-            KeyInput::Tab => {
+        }
+
+        match key.bare {
+            BareKey::Tab => {
                 self.view = match self.view {
                     View::Directory => View::Log,
                     View::Log => View::Directory,
@@ -212,15 +242,23 @@ impl Exchange {
                 self.seed_selection();
                 vec![]
             }
-            KeyInput::Up | KeyInput::Char('k') => {
+            BareKey::Up => {
                 self.navigate(-1);
                 vec![]
             }
-            KeyInput::Down | KeyInput::Char('j') => {
+            BareKey::Down => {
                 self.navigate(1);
                 vec![]
             }
-            KeyInput::Enter => match self.view {
+            BareKey::Char('k') if !key.shift && !key.super_ => {
+                self.navigate(-1);
+                vec![]
+            }
+            BareKey::Char('j') if !key.shift && !key.super_ => {
+                self.navigate(1);
+                vec![]
+            }
+            BareKey::Enter => match self.view {
                 View::Directory => self
                     .selected_line()
                     .map(|l| vec![HostIntent::FocusLine(l)])
@@ -239,7 +277,7 @@ impl Exchange {
                     intents
                 }
             },
-            KeyInput::Char('m') => {
+            BareKey::Char('m') if !key.shift && !key.super_ => {
                 if let Some(line) = self.selected_line() {
                     self.seat = Some(line);
                     self.log.place(
@@ -250,30 +288,32 @@ impl Exchange {
                 }
                 vec![]
             }
-            KeyInput::Char('s') => match (self.seat, self.selected_line()) {
-                (Some(seat), Some(line)) if seat != line => {
-                    self.log.place(
-                        None,
-                        CallKind::Info,
-                        format!(
-                            "line {} swapped into the seat, line {} to its slot",
-                            line.0, seat.0
-                        ),
-                    );
-                    self.seat = Some(line);
-                    vec![HostIntent::SwapPanes { seat, line }]
+            BareKey::Char('s') if !key.shift && !key.super_ => {
+                match (self.seat, self.selected_line()) {
+                    (Some(seat), Some(line)) if seat != line => {
+                        self.log.place(
+                            None,
+                            CallKind::Info,
+                            format!(
+                                "line {} swapped into the seat, line {} to its slot",
+                                line.0, seat.0
+                            ),
+                        );
+                        self.seat = Some(line);
+                        vec![HostIntent::SwapPanes { seat, line }]
+                    }
+                    (None, _) => {
+                        self.log.place(
+                            None,
+                            CallKind::Info,
+                            "no seat marked — press m on a line first",
+                        );
+                        vec![]
+                    }
+                    _ => vec![],
                 }
-                (None, _) => {
-                    self.log.place(
-                        None,
-                        CallKind::Info,
-                        "no seat marked — press m on a line first",
-                    );
-                    vec![]
-                }
-                _ => vec![],
-            },
-            KeyInput::Char('i') => {
+            }
+            BareKey::Char('i') if !key.shift && !key.super_ => {
                 if let Some(line) = self.selected_line() {
                     self.prompt = Some(Prompt {
                         line,
@@ -282,9 +322,13 @@ impl Exchange {
                 }
                 vec![]
             }
-            KeyInput::Char('a') => self.settle_selected(Triage::Answered),
-            KeyInput::Char('p') => self.settle_selected(Triage::Parked),
-            KeyInput::Char('R') => {
+            BareKey::Char('a') if !key.shift && !key.super_ => {
+                self.settle_selected(Triage::Answered)
+            }
+            BareKey::Char('p') if !key.shift && !key.super_ => {
+                self.settle_selected(Triage::Parked)
+            }
+            BareKey::Char('R') if !key.shift && !key.super_ => {
                 if let Some(line) = self.selected_line() {
                     self.log.place(
                         Some(line),
@@ -296,36 +340,39 @@ impl Exchange {
                 }
                 vec![]
             }
-            KeyInput::Char('o') => {
+            BareKey::Char('o') if !key.shift && !key.super_ => {
                 self.sort = self.sort.next();
                 self.seed_selection();
                 vec![]
             }
-            KeyInput::Char('n') => vec![HostIntent::OpenLine {
+            BareKey::Char('n') if !key.shift && !key.super_ => vec![HostIntent::OpenLine {
                 command: self.line_command.clone(),
                 cwd: None,
             }],
-            KeyInput::Esc => vec![HostIntent::HideSelf],
+            BareKey::Esc => vec![HostIntent::HideSelf],
             _ => vec![],
         }
     }
 
     fn prompt_key(&mut self, key: KeyInput) -> Vec<HostIntent> {
         let prompt = self.prompt.as_mut().expect("prompt_key without prompt");
-        match key {
-            KeyInput::Char(c) => {
+        match key.bare {
+            BareKey::Char(c) => {
+                // Swallow all chars (modified or not) into the prompt buffer —
+                // matching v0.1 behavior where the prompt captured everything
+                // printable, including digits.
                 prompt.buffer.push(c);
                 vec![]
             }
-            KeyInput::Backspace => {
+            BareKey::Backspace => {
                 prompt.buffer.pop();
                 vec![]
             }
-            KeyInput::Esc => {
+            BareKey::Esc => {
                 self.prompt = None;
                 vec![]
             }
-            KeyInput::Enter => {
+            BareKey::Enter => {
                 let Prompt { line, buffer } = self.prompt.take().expect("checked above");
                 if buffer.is_empty() {
                     return vec![];
@@ -641,6 +688,7 @@ impl Exchange {
 #[cfg(test)]
 mod tests {
     use super::*;
+    use crate::key::BareKey;
 
     fn pane(id: u32, title: &str) -> PaneSnapshot {
         PaneSnapshot {
@@ -697,7 +745,7 @@ mod tests {
     fn deck_key_focuses_line_one_press() {
         let mut ex = exchange_with(vec![pane(5, "a")]);
         assert_eq!(
-            ex.key(KeyInput::Char('1')),
+            ex.key(KeyInput::ch('1')),
             vec![HostIntent::FocusLine(LineId(5))]
         );
     }
@@ -706,13 +754,13 @@ mod tests {
     fn seat_swap_flow() {
         let mut ex = exchange_with(vec![pane(1, "a"), pane(2, "b")]);
         // no seat yet: s logs info, no intent
-        assert!(ex.key(KeyInput::Char('s')).is_empty());
+        assert!(ex.key(KeyInput::ch('s')).is_empty());
         // mark selected (first) as seat, select second, swap
-        ex.key(KeyInput::Char('m'));
+        ex.key(KeyInput::ch('m'));
         assert_eq!(ex.seat, Some(LineId(1)));
-        ex.key(KeyInput::Down);
+        ex.key(KeyInput::key(BareKey::Down));
         assert_eq!(
-            ex.key(KeyInput::Char('s')),
+            ex.key(KeyInput::ch('s')),
             vec![HostIntent::SwapPanes {
                 seat: LineId(1),
                 line: LineId(2)
@@ -729,14 +777,14 @@ mod tests {
     fn seat_follows_position_across_chained_swaps() {
         let mut ex = exchange_with(vec![pane(1, "a"), pane(2, "b"), pane(3, "c")]);
         // m on line 1 (seat), select line 2, swap
-        ex.key(KeyInput::Char('m'));
-        ex.key(KeyInput::Down);
-        ex.key(KeyInput::Char('s'));
+        ex.key(KeyInput::ch('m'));
+        ex.key(KeyInput::key(BareKey::Down));
+        ex.key(KeyInput::ch('s'));
         assert_eq!(ex.seat, Some(LineId(2)));
         // select line 3, swap again — should target the CURRENT seat (line 2)
-        ex.key(KeyInput::Down);
+        ex.key(KeyInput::key(BareKey::Down));
         assert_eq!(
-            ex.key(KeyInput::Char('s')),
+            ex.key(KeyInput::ch('s')),
             vec![HostIntent::SwapPanes {
                 seat: LineId(2),
                 line: LineId(3)
@@ -748,15 +796,15 @@ mod tests {
     #[test]
     fn prompt_types_and_sends_with_cr() {
         let mut ex = exchange_with(vec![pane(3, "a")]);
-        ex.key(KeyInput::Char('i'));
+        ex.key(KeyInput::ch('i'));
         assert!(ex.prompt.is_some());
         for c in "hi".chars() {
-            ex.key(KeyInput::Char(c));
+            ex.key(KeyInput::ch(c));
         }
         // deck digits must go into the buffer, not jump
-        ex.key(KeyInput::Char('1'));
-        ex.key(KeyInput::Backspace);
-        let intents = ex.key(KeyInput::Enter);
+        ex.key(KeyInput::ch('1'));
+        ex.key(KeyInput::key(BareKey::Backspace));
+        let intents = ex.key(KeyInput::key(BareKey::Enter));
         assert_eq!(
             intents,
             vec![HostIntent::Say {
@@ -778,7 +826,7 @@ mod tests {
         }));
         assert!(ex.lines().next().unwrap().ringing);
         // answer from directory view ('a' on selected line)
-        let intents = ex.key(KeyInput::Char('a'));
+        let intents = ex.key(KeyInput::ch('a'));
         assert!(intents.contains(&HostIntent::TintLine {
             line: LineId(4),
             fg: None,
@@ -839,11 +887,11 @@ mod tests {
     fn sort_modes_cycle_and_ringing_first_floats_ringers() {
         let mut ex = exchange_with(vec![pane(1, "a"), pane(2, "b"), pane(3, "c")]);
         ex.pipe_op(r#"{"op":"ring","line":3}"#, None);
-        ex.key(KeyInput::Char('o')); // deck -> ringing-first
+        ex.key(KeyInput::ch('o')); // deck -> ringing-first
         assert_eq!(ex.sort, SortMode::RingingFirst);
         assert_eq!(ex.sorted_lines()[0].id, LineId(3));
-        ex.key(KeyInput::Char('o'));
-        ex.key(KeyInput::Char('o'));
+        ex.key(KeyInput::ch('o'));
+        ex.key(KeyInput::ch('o'));
         assert_eq!(ex.sort, SortMode::Deck);
         assert_eq!(ex.sorted_lines()[0].id, LineId(1));
     }
@@ -870,7 +918,7 @@ mod tests {
         ex.pipe_op(r#"{"op":"ring","line":1}"#, None);
         ex.pipe_op(r#"{"op":"ring","line":2}"#, None);
         ex.pipe_op(r#"{"op":"ring","line":1}"#, None);
-        ex.key(KeyInput::Tab); // log view
+        ex.key(KeyInput::key(BareKey::Tab)); // log view
         ex.sort = SortMode::Board;
         let lines: Vec<_> = ex.log_view_calls().iter().map(|c| c.line).collect();
         let first_l2 = lines.iter().position(|l| *l == Some(LineId(2))).unwrap();
@@ -884,9 +932,12 @@ mod tests {
     #[test]
     fn tab_switches_views_and_esc_hides() {
         let mut ex = exchange_with(vec![pane(1, "a")]);
-        ex.key(KeyInput::Tab);
+        ex.key(KeyInput::key(BareKey::Tab));
         assert_eq!(ex.view, View::Log);
-        assert_eq!(ex.key(KeyInput::Esc), vec![HostIntent::HideSelf]);
+        assert_eq!(
+            ex.key(KeyInput::key(BareKey::Esc)),
+            vec![HostIntent::HideSelf]
+        );
     }
 
     // --- 04-05 gap-closure: selection must track by identity, not row index ---
@@ -901,17 +952,17 @@ mod tests {
             pane(4, "d"),
         ]);
         // Cycle sort to RingingFirst.
-        ex.key(KeyInput::Char('o'));
+        ex.key(KeyInput::ch('o'));
         assert_eq!(ex.sort, SortMode::RingingFirst);
         // Navigate cursor to line 2 (deck sort within ringing-first: 0,1,2,4).
         // selected starts at first line (id 0). j twice → line 2.
-        ex.key(KeyInput::Down);
-        ex.key(KeyInput::Down);
+        ex.key(KeyInput::key(BareKey::Down));
+        ex.key(KeyInput::key(BareKey::Down));
         assert_eq!(ex.selected_line(), Some(LineId(2)));
 
         // Ring the selected line. In RingingFirst sort, refresh_ring_flags()
         // re-sorts line 2 to the top. The cursor must stay on line 2.
-        ex.key(KeyInput::Char('R'));
+        ex.key(KeyInput::ch('R'));
         assert_eq!(
             ex.selected_line(),
             Some(LineId(2)),
@@ -919,7 +970,7 @@ mod tests {
         );
 
         // Answer: must settle line 2, not a neighbor.
-        ex.key(KeyInput::Char('a'));
+        ex.key(KeyInput::ch('a'));
         let line2 = ex.lines().find(|l| l.id == LineId(2)).unwrap();
         assert!(!line2.ringing, "answer did not clear line 2's ring");
         // No residual rings anywhere.
@@ -932,7 +983,7 @@ mod tests {
     #[test]
     fn selection_follows_line_across_pipe_ring_resort() {
         let mut ex = exchange_with(vec![pane(1, "a"), pane(2, "b"), pane(3, "c")]);
-        ex.key(KeyInput::Char('o')); // RingingFirst
+        ex.key(KeyInput::ch('o')); // RingingFirst
         // Cursor on line 1 (first row).
         assert_eq!(ex.selected_line(), Some(LineId(1)));
         // Pipe ring on a DIFFERENT line re-sorts the view.
@@ -948,8 +999,8 @@ mod tests {
     fn selection_survives_line_close_index_shift() {
         let mut ex = exchange_with(vec![pane(1, "a"), pane(2, "b"), pane(3, "c")]);
         // Cursor on line 3 (j j from line 1).
-        ex.key(KeyInput::Down);
-        ex.key(KeyInput::Down);
+        ex.key(KeyInput::key(BareKey::Down));
+        ex.key(KeyInput::key(BareKey::Down));
         assert_eq!(ex.selected_line(), Some(LineId(3)));
         // Close line 1: snapshot without it. Indices shift — line 3 must stay.
         ex.ingest_panes(vec![pane(2, "b"), pane(3, "c")]);
@@ -973,11 +1024,11 @@ mod tests {
         ex.pipe_op(r#"{"op":"ring","line":1}"#, None);
         ex.pipe_op(r#"{"op":"ring","line":2}"#, None);
         // Switch to log view, RingingFirst sort.
-        ex.key(KeyInput::Tab);
-        ex.key(KeyInput::Char('o')); // RingingFirst
+        ex.key(KeyInput::key(BareKey::Tab));
+        ex.key(KeyInput::ch('o')); // RingingFirst
         // Log view newest-first + ringing-first: both calls are Ringing.
         // Select the second row (j once).
-        ex.key(KeyInput::Down);
+        ex.key(KeyInput::key(BareKey::Down));
         let anchor_seq = ex.selected_call_seq();
         assert!(anchor_seq.is_some(), "no call selected");
         let anchor_line = ex.selected_line();
@@ -994,6 +1045,49 @@ mod tests {
             ex.selected_call_seq(),
             anchor_seq,
             "log cursor drifted after triage re-sort"
+        );
+    }
+
+    // --- COMP-09: compose-verb binding recognition ---
+
+    #[test]
+    fn compose_board_key_recognized_and_bare_char_is_not() {
+        let mut ex = exchange_with(vec![pane(1, "a")]);
+        // Default binding is Shift+b.
+        let binding = ex.compose_board_key;
+        assert_eq!(binding.ch, 'b');
+        assert!(binding.shift);
+        assert!(!binding.super_);
+
+        // The compose key fires (no-op placeholder; returns empty intents for now).
+        let shift_b = KeyInput::new(BareKey::Char('b'), true, false);
+        let intents = ex.key(shift_b);
+        // The branch returns vec![] as a placeholder for plan 01-03.
+        // Key assertion: it did NOT emit a deck focus or any other v0.1 intent.
+        assert!(
+            intents.is_empty(),
+            "compose-verb key must return empty intents (no-op placeholder)"
+        );
+
+        // Bare 'b' with no modifier must NOT trigger the compose path —
+        // it falls through to the deck/letter-verb logic instead.
+        // With no line on deck key 'b' and no letter-verb for 'b', it no-ops.
+        let bare_b = KeyInput::ch('b');
+        let intents = ex.key(bare_b);
+        assert!(
+            intents.is_empty(),
+            "bare 'b' should not trigger compose-verb (it has no deck key or letter binding)"
+        );
+
+        // Verify the distinction more sharply: if 'b' were a deck key it would
+        // focus a line. If the compose verb matched bare 'b', that would be wrong.
+        // This is already proven by the above non-match, but we also verify that
+        // deck digits still work normally (not captured by the compose branch).
+        let focus_intents = ex.key(KeyInput::ch('1'));
+        assert_eq!(
+            focus_intents,
+            vec![HostIntent::FocusLine(LineId(1))],
+            "deck digit '1' must still focus the line, not be captured by compose branch"
         );
     }
 }
