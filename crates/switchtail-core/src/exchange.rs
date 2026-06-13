@@ -61,7 +61,8 @@ pub struct Exchange {
     pub seat: Option<LineId>,
     pub view: View,
     pub sort: SortMode,
-    pub selected: usize,
+    selected_line_id: Option<LineId>,
+    selected_seq_id: Option<u64>,
     pub prompt: Option<Prompt>,
     /// Lines currently host-highlighted/tinted as ringing (for diffing).
     lit: Vec<LineId>,
@@ -164,7 +165,15 @@ impl Exchange {
                 format!("line {} closed", id.0),
             );
         }
-        self.clamp_selection();
+        match self.selected_line_id {
+            Some(id) if !self.lines.contains_key(&id) => {
+                self.selected_line_id = self.sorted_lines().first().map(|l| l.id);
+            }
+            None if !self.lines.is_empty() => {
+                self.selected_line_id = self.sorted_lines().first().map(|l| l.id);
+            }
+            _ => {}
+        }
         self.refresh_ring_flags();
         self.attention_intents()
     }
@@ -200,16 +209,15 @@ impl Exchange {
                     View::Directory => View::Log,
                     View::Log => View::Directory,
                 };
-                self.selected = 0;
+                self.seed_selection();
                 vec![]
             }
             KeyInput::Up | KeyInput::Char('k') => {
-                self.selected = self.selected.saturating_sub(1);
+                self.navigate(-1);
                 vec![]
             }
             KeyInput::Down | KeyInput::Char('j') => {
-                self.selected += 1;
-                self.clamp_selection();
+                self.navigate(1);
                 vec![]
             }
             KeyInput::Enter => match self.view {
@@ -281,7 +289,7 @@ impl Exchange {
             }
             KeyInput::Char('o') => {
                 self.sort = self.sort.next();
-                self.selected = 0;
+                self.seed_selection();
                 vec![]
             }
             KeyInput::Char('n') => vec![HostIntent::OpenLine {
@@ -469,11 +477,32 @@ impl Exchange {
 
     pub fn selected_line(&self) -> Option<LineId> {
         match self.view {
-            View::Directory => self.sorted_lines().get(self.selected).map(|l| l.id),
+            View::Directory => {
+                let anchor = self.selected_line_id?;
+                if self.lines.contains_key(&anchor) {
+                    Some(anchor)
+                } else {
+                    self.sorted_lines().first().map(|l| l.id)
+                }
+            }
             View::Log => self
                 .selected_call_seq()
                 .and_then(|seq| self.log.calls().iter().find(|c| c.seq == seq))
                 .and_then(|c| c.line),
+        }
+    }
+
+    /// The row index of the selection anchor in the current view ordering.
+    pub(crate) fn selected_row(&self) -> Option<usize> {
+        match self.view {
+            View::Directory => {
+                let anchor = self.selected_line()?;
+                self.sorted_lines().iter().position(|l| l.id == anchor)
+            }
+            View::Log => {
+                let anchor = self.selected_call_seq()?;
+                self.log_view_calls().iter().position(|c| c.seq == anchor)
+            }
         }
     }
 
@@ -491,18 +520,51 @@ impl Exchange {
     }
 
     fn selected_call_seq(&self) -> Option<u64> {
-        self.log_view_calls().get(self.selected).map(|c| c.seq)
+        let anchor = self.selected_seq_id?;
+        if self.log_view_calls().iter().any(|c| c.seq == anchor) {
+            Some(anchor)
+        } else {
+            self.log_view_calls().first().map(|c| c.seq)
+        }
     }
 
-    fn clamp_selection(&mut self) {
-        let len = match self.view {
-            View::Directory => self.lines.len(),
-            View::Log => self.log.calls().len(),
-        };
-        if len == 0 {
-            self.selected = 0;
-        } else if self.selected >= len {
-            self.selected = len - 1;
+    fn seed_selection(&mut self) {
+        match self.view {
+            View::Directory => {
+                self.selected_line_id = self.sorted_lines().first().map(|l| l.id);
+            }
+            View::Log => {
+                self.selected_seq_id = self.log_view_calls().first().map(|c| c.seq);
+            }
+        }
+    }
+
+    fn navigate(&mut self, delta: isize) {
+        match self.view {
+            View::Directory => {
+                let lines = self.sorted_lines();
+                if lines.is_empty() {
+                    return;
+                }
+                let cur = self
+                    .selected_line_id
+                    .and_then(|id| lines.iter().position(|l| l.id == id))
+                    .unwrap_or(0);
+                let next = (cur as isize + delta).clamp(0, lines.len() as isize - 1) as usize;
+                self.selected_line_id = Some(lines[next].id);
+            }
+            View::Log => {
+                let calls = self.log_view_calls();
+                if calls.is_empty() {
+                    return;
+                }
+                let cur = self
+                    .selected_seq_id
+                    .and_then(|seq| calls.iter().position(|c| c.seq == seq))
+                    .unwrap_or(0);
+                let next = (cur as isize + delta).clamp(0, calls.len() as isize - 1) as usize;
+                self.selected_seq_id = Some(calls[next].seq);
+            }
         }
     }
 

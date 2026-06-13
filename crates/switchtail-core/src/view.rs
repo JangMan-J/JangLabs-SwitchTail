@@ -73,6 +73,7 @@ fn render_directory(ex: &Exchange, body_rows: usize, width: usize, out: &mut Vec
         ));
         return;
     }
+    let sel_row = ex.selected_row();
     for (i, l) in lines.iter().take(body_rows).enumerate() {
         let key = ex
             .deck
@@ -95,7 +96,7 @@ fn render_directory(ex: &Exchange, body_rows: usize, width: usize, out: &mut Vec
             " ".into()
         };
         let name = truncate(&l.display_name(), width.saturating_sub(30));
-        let sel = if i == ex.selected { INVERT } else { "" };
+        let sel = if sel_row == Some(i) { INVERT } else { "" };
         out.push(format!(
             "{sel}{focus}{seat}{BOLD}{key}{RESET}{sel} b{} {name} {DIM}{kind}{RESET}{sel} {state}{RESET}",
             l.board
@@ -109,6 +110,7 @@ fn render_log(ex: &Exchange, body_rows: usize, width: usize, out: &mut Vec<Strin
         out.push(format!("{DIM} the call log is empty{RESET}"));
         return;
     }
+    let sel_row = ex.selected_row();
     for (i, c) in calls.iter().take(body_rows).enumerate() {
         let (mark, style) = match c.triage {
             Triage::Ringing => ("◉ ring", AMBER),
@@ -120,7 +122,7 @@ fn render_log(ex: &Exchange, body_rows: usize, width: usize, out: &mut Vec<Strin
             .map(|l| format!("L{}", l.0))
             .unwrap_or_else(|| "—".into());
         let note = truncate(&c.note, width.saturating_sub(24));
-        let sel = if i == ex.selected { INVERT } else { "" };
+        let sel = if sel_row == Some(i) { INVERT } else { "" };
         out.push(format!(
             "{sel}{style}{mark}{RESET}{sel} {DIM}#{}{RESET}{sel} {line:>4} {note}{RESET}",
             c.seq
