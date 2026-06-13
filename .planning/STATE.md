@@ -4,12 +4,12 @@ milestone: v0.2
 milestone_name: Composing the Exchange
 status: executing
 last_updated: "2026-06-13T18:27:46.249Z"
-last_activity: 2026-06-13 -- Phase 01 execution started
+last_activity: 2026-06-13 -- Plan 01-02 complete
 progress:
   total_phases: 3
   completed_phases: 0
   total_plans: 3
-  completed_plans: 1
+  completed_plans: 2
   percent: 0
 ---
 
@@ -28,10 +28,9 @@ is foundational, not deferred. Next: plan Phase 1.
 ## Current Position
 
 Phase: 01 (board-foundation) — EXECUTING
-Plan: 2 of 3
+Plan: 3 of 3
 Status: Ready to execute
-Last activity: 2026-06-13 -- Phase 01 execution started
-(board-of-agents model; the prior single-line-first roadmap was superseded)
+Last activity: 2026-06-13 -- Plan 01-02 complete (SpawnBoard intent, agent config, fan-out, deck-cap, note_command_exit, no-drift test)
 
 Progress: [..........................] 0% (0/3 phases)
 
@@ -105,6 +104,12 @@ Coverage: 12/12 v0.2 requirements mapped (each to exactly one phase).
 
 - Vocabulary seeded as domain language per owner mid-task directive
   (board = tab, line = pane, deck, trunk, exchange, operator).
+
+- **Exchange::Default is explicit (not derived)** (2026-06-13): `agent_command` needs `vec!["claude"]` which cannot come from `#[derive(Default)]` on a Vec field. Explicit `Default` impl sets all fields.
+
+- **deck_overflow_warning counts occupied slots as lines-with-a-deck-key** (2026-06-13): counts via `lines.keys().filter(|id| deck.key_for(**id).is_some())` — avoids adding public Deck API just for a count.
+
+- **note_command_exit surfaces any exit status** (2026-06-13): fires a LineExited entry for ANY status (0, 127, None); only the 127 wording is special. Line is RETAINED, no kill intent. Modelled on note_cwd_change.
 
 ### Blockers/Concerns
 

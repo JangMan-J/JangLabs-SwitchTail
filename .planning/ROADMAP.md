@@ -81,7 +81,7 @@ board-fill reconciliation under the real Zellij event model.
 Plans:
 
 - [x] 01-01-PLAN.md — Modifier-carrying KeyInput + configurable compose-verb binding (COMP-09)
-- [ ] 01-02-PLAN.md — SpawnBoard intent + agent/board-size config + fan-out + deck-cap warning + exit-127 + async no-drift (COMP-01,02,03,10,11,12; core/TDD)
+- [x] 01-02-PLAN.md — SpawnBoard intent + agent/board-size config + fan-out + deck-cap warning + exit-127 + async no-drift (COMP-01,02,03,10,11,12; core/TDD)
 - [ ] 01-03-PLAN.md — Adapter SpawnBoard arm + RunCommands permission + CommandPaneExited routing + live reload smoke (COMP-01,02,11; human-verify)
 
 **UI hint**: yes
@@ -155,6 +155,6 @@ the line verb reuses unchanged)
 | 2. Plugin Adapter | v0.1 | — | Complete | 2026-06-12 |
 | 3. Pipes & Protocol | v0.1 | — | Complete | 2026-06-12 |
 | 4. Operator Polish & E2E | v0.1 | — | Complete | 2026-06-13 |
-| 1. Board Foundation — Spawn One Board of Agents | v0.2 | 0/3 | Planned | - |
+| 1. Board Foundation — Spawn One Board of Agents | v0.2 | 2/3 | In Progress | - |
 | 2. Count Grammar — N Boards in One Gesture | v0.2 | 0/0 | Not started | - |
 | 3. Line Verb — Top Up the Current Board | v0.2 | 0/0 | Not started | - |
