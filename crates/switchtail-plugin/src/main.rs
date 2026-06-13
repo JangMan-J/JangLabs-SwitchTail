@@ -6,8 +6,12 @@
 use std::collections::BTreeMap;
 
 use switchtail_core::{
-    BoardSnapshot, Exchange, HostIntent, KeyInput, LineId, PaneSnapshot, protocol,
+    BoardSnapshot, Exchange, HostIntent, KeyBinding, KeyInput, LineId, PaneSnapshot,
+    protocol,
 };
+// Alias the core BareKey so it doesn't clash with zellij_tile::prelude::BareKey
+// in the adapter's match arms. We use `CoreBareKey` only inside this file.
+use switchtail_core::BareKey as CoreBareKey;
 use zellij_tile::prelude::*;
 
 #[derive(Default)]
@@ -21,6 +25,16 @@ impl ZellijPlugin for State {
     fn load(&mut self, configuration: BTreeMap<String, String>) {
         if let Some(cmd) = configuration.get("line_command") {
             self.exchange.line_command = cmd.split_whitespace().map(|s| s.to_string()).collect();
+        }
+        // Read the configurable compose-verb binding from plugin config.
+        // Format: "Sb" = Shift+b, "Qb" = Super+b, "SQb" = Shift+Super+b.
+        // Falls back to the Exchange default (Shift+b) if absent or unparseable
+        // — must never panic on bad config (T-01-02 DoS mitigation).
+        if let Some(raw) = configuration.get("compose_board_key") {
+            if let Some(binding) = parse_compose_binding(raw) {
+                self.exchange.compose_board_key = binding;
+            }
+            // Silently ignore unparseable config — the Exchange default holds.
         }
         request_permission(&[
             PermissionType::ReadApplicationState,
@@ -206,20 +220,83 @@ fn pane_snapshots(manifest: &PaneManifest) -> Vec<PaneSnapshot> {
     out
 }
 
+/// Map a zellij `KeyWithModifier` into the core `KeyInput`, carrying Shift
+/// and Super modifiers, rejecting Ctrl/Alt.
+///
+/// VERIFIED (zellij-utils-0.44.3/src/data.rs:298): `KeyModifier` is the enum
+/// `{ Ctrl, Alt, Shift, Super }`. `KeyWithModifier.key_modifiers` is a
+/// `BTreeSet<KeyModifier>` that may contain any combination.
+///
+/// Rules:
+/// - If the modifier set contains `Ctrl` OR `Alt` → return `None` (Zellij's
+///   space; T-01-01 tampering mitigation).
+/// - Otherwise extract `shift` = set.contains(Shift), `super_` = set.contains(Super).
+/// - Map `bare_key` to core `BareKey`; unknown bare keys → None.
 fn key_input(key: &KeyWithModifier) -> Option<KeyInput> {
-    if !key.key_modifiers.is_empty()
-        && !(key.key_modifiers.len() == 1 && key.key_modifiers.contains(&KeyModifier::Shift))
+    // Reject Ctrl- and Alt-modified keys — Zellij owns that namespace.
+    if key.key_modifiers.contains(&KeyModifier::Ctrl)
+        || key.key_modifiers.contains(&KeyModifier::Alt)
     {
         return None;
     }
-    match key.bare_key {
-        BareKey::Char(c) => Some(KeyInput::Char(c)),
-        BareKey::Enter => Some(KeyInput::Enter),
-        BareKey::Esc => Some(KeyInput::Esc),
-        BareKey::Up => Some(KeyInput::Up),
-        BareKey::Down => Some(KeyInput::Down),
-        BareKey::Tab => Some(KeyInput::Tab),
-        BareKey::Backspace => Some(KeyInput::Backspace),
-        _ => None,
+
+    let shift = key.key_modifiers.contains(&KeyModifier::Shift);
+    let super_ = key.key_modifiers.contains(&KeyModifier::Super);
+
+    // zellij-tile's BareKey and our core BareKey share the same names but are
+    // distinct types. We pattern-match on the zellij variant (unqualified =
+    // zellij_tile::prelude::BareKey via the glob import) and produce the core
+    // variant (CoreBareKey = switchtail_core::BareKey, aliased above).
+    let bare = match key.bare_key {
+        BareKey::Char(c) => CoreBareKey::Char(c),
+        BareKey::Enter => CoreBareKey::Enter,
+        BareKey::Esc => CoreBareKey::Esc,
+        BareKey::Up => CoreBareKey::Up,
+        BareKey::Down => CoreBareKey::Down,
+        BareKey::Tab => CoreBareKey::Tab,
+        BareKey::Backspace => CoreBareKey::Backspace,
+        _ => return None,
+    };
+
+    Some(KeyInput::new(bare, shift, super_))
+}
+
+/// Parse a compose-verb binding string from plugin config.
+///
+/// Format: optional modifier prefix(es) + single char.
+///   "Sb"  → Shift+b
+///   "Qb"  → Super+b  (Q for "Quiet"/"Super" — avoiding the 'S' ambiguity)
+///   "SQb" → Shift+Super+b
+///   "b"   → bare 'b' (valid but unusual; pick a modifier-prefixed form in config)
+///
+/// Returns `None` for any malformed input — the caller silently keeps the
+/// Exchange default (T-01-02: total parse, never panic).
+fn parse_compose_binding(raw: &str) -> Option<KeyBinding> {
+    let mut shift = false;
+    let mut super_ = false;
+    let mut chars = raw.chars().peekable();
+
+    // Consume leading modifier flags: S = Shift, Q = Super.
+    while let Some(&c) = chars.peek() {
+        match c {
+            'S' => {
+                shift = true;
+                chars.next();
+            }
+            'Q' => {
+                super_ = true;
+                chars.next();
+            }
+            _ => break,
+        }
     }
+
+    // The next (and only remaining) char is the binding character.
+    let ch = chars.next()?;
+    // Any trailing chars → malformed.
+    if chars.next().is_some() {
+        return None;
+    }
+
+    Some(KeyBinding { ch, shift, super_ })
 }
