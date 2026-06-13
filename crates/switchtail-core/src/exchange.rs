@@ -52,7 +52,7 @@ pub struct Prompt {
     pub buffer: String,
 }
 
-#[derive(Debug, Clone, Default)]
+#[derive(Debug, Clone)]
 pub struct Exchange {
     lines: BTreeMap<LineId, Line>,
     boards: Vec<BoardSnapshot>,
@@ -68,17 +68,47 @@ pub struct Exchange {
     lit: Vec<LineId>,
     /// Command used by the `n` (new line) key; empty = default shell.
     pub line_command: Vec<String>,
+    /// Default agent command run by each line in a spawned board.
+    /// Resolved in core before emitting SpawnBoard/OpenLine intents so the
+    /// adapter never needs to re-derive it. Default: ["claude"]. Distinct from
+    /// `line_command` (the bare-shell `n` opt-out, which stays unchanged).
+    /// Note: a bare "claude" may exit 127 if not on the pane's PATH (see
+    /// T-01-04 / STATE.md blocker). Use an absolute path or PATH-safe wrapper.
+    pub agent_command: Vec<String>,
+    /// Number of lines a freshly spawned board carries. Default: 5.
+    /// The compose-verb fan-out emits [SpawnBoard, OpenLine×(lines_per_board-1)].
+    pub lines_per_board: usize,
     /// Configurable compose-verb binding for the board verb (COMP-09).
     ///
     /// Default: Shift+b (`KeyBinding::default()`). Config-overridable via
     /// `compose_board_key` in the plugin KDL config. When the operator presses
     /// a key matching this binding, the compose-verb branch fires in `key()`.
-    /// The actual spawn intent is wired in plan 01-03 (SpawnBoard); for now
-    /// the matching branch is a no-op placeholder.
     ///
     /// VERIFIED (zellij-utils-0.44.3/src/data.rs:298): `KeyModifier::Super`
     /// exists (enum = Ctrl, Alt, Shift, Super), so Super bindings are valid.
     pub compose_board_key: KeyBinding,
+}
+
+impl Default for Exchange {
+    fn default() -> Self {
+        Self {
+            lines: BTreeMap::default(),
+            boards: Vec::default(),
+            deck: Deck::default(),
+            log: CallLog::default(),
+            seat: None,
+            view: View::default(),
+            sort: SortMode::default(),
+            selected_line_id: None,
+            selected_seq_id: None,
+            prompt: None,
+            lit: Vec::default(),
+            line_command: Vec::default(),
+            agent_command: vec!["claude".to_string()],
+            lines_per_board: 5,
+            compose_board_key: KeyBinding::default(),
+        }
+    }
 }
 
 impl Exchange {
@@ -214,12 +244,23 @@ impl Exchange {
         // Compose-verb check: must come BEFORE deck dispatch so a Shift/Super
         // key cannot accidentally fire a deck jump. An unmodified key with the
         // same char does NOT match (extra-modifier non-match is enforced by
-        // `KeyInput::matches`). This branch is a no-op placeholder — the
-        // SpawnBoard intent fan-out is wired in plan 01-03 once 01-02 defines
-        // the `SpawnBoard` / `OpenLine` intents.
+        // `KeyInput::matches`).
         if key.matches(&self.compose_board_key) {
-            // 01-02 returns the [SpawnBoard, OpenLine×(N-1)] fan-out here.
-            return vec![];
+            // Warn if the spawn would exceed remaining deck capacity (Task 2).
+            self.deck_overflow_warning(self.lines_per_board);
+            // Fan-out: [SpawnBoard { agent_command }, OpenLine { agent_command }×(N-1)].
+            // Core resolves command and count; the adapter dispatches each as one
+            // shim call. FIFO order ensures lines 2..N land on the new board.
+            let cmd = self.agent_command.clone();
+            let mut intents = Vec::with_capacity(self.lines_per_board);
+            intents.push(HostIntent::SpawnBoard { command: cmd.clone() });
+            for _ in 1..self.lines_per_board {
+                intents.push(HostIntent::OpenLine {
+                    command: cmd.clone(),
+                    cwd: None,
+                });
+            }
+            return intents;
         }
 
         // Deck jump: unmodified char only. Shift/Super carry the compose verb;
@@ -388,6 +429,35 @@ impl Exchange {
                 }]
             }
             _ => vec![],
+        }
+    }
+
+    /// Place a CB-safe (amber/Info) call-log warning if `spawn_count` lines
+    /// would exceed the remaining deck capacity. One warning only; never drops
+    /// a line from the fan-out — this is advisory and purely informational.
+    ///
+    /// Remaining capacity = DECK_KEYS.len() - currently-assigned slots.
+    /// Uses `CallKind::Info` so it does not start ringing; wording is neutral
+    /// (no red/green semantics) per CB-safe rule in CLAUDE.md.
+    fn deck_overflow_warning(&mut self, spawn_count: usize) {
+        // Count occupied deck slots by checking how many known lines have a key.
+        let used = self
+            .lines
+            .keys()
+            .filter(|id| self.deck.key_for(**id).is_some())
+            .count();
+        let remaining = crate::deck::DECK_KEYS.len().saturating_sub(used);
+        if spawn_count > remaining {
+            let overflow = spawn_count - remaining;
+            self.log.place(
+                None,
+                CallKind::Info,
+                format!(
+                    "{} line(s) will spawn without a deck key (deck full at {})",
+                    overflow,
+                    crate::deck::DECK_KEYS.len()
+                ),
+            );
         }
     }
 
@@ -1059,14 +1129,18 @@ mod tests {
         assert!(binding.shift);
         assert!(!binding.super_);
 
-        // The compose key fires (no-op placeholder; returns empty intents for now).
+        // The compose key fires and returns the board-spawn fan-out.
         let shift_b = KeyInput::new(BareKey::Char('b'), true, false);
         let intents = ex.key(shift_b);
-        // The branch returns vec![] as a placeholder for plan 01-03.
-        // Key assertion: it did NOT emit a deck focus or any other v0.1 intent.
+        // Key assertion: it returned the fan-out (SpawnBoard + OpenLine×(N-1))
+        // and did NOT emit a deck focus or any other v0.1 intent.
         assert!(
-            intents.is_empty(),
-            "compose-verb key must return empty intents (no-op placeholder)"
+            !intents.is_empty(),
+            "compose-verb key must return the board-spawn fan-out"
+        );
+        assert!(
+            matches!(intents[0], HostIntent::SpawnBoard { .. }),
+            "first intent must be SpawnBoard"
         );
 
         // Bare 'b' with no modifier must NOT trigger the compose path —
