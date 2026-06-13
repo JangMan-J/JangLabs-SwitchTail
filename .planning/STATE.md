@@ -3,8 +3,8 @@ gsd_state_version: 1.0
 milestone: v0.2
 milestone_name: Composing the Exchange
 status: executing
-last_updated: "2026-06-13T18:27:46.249Z"
-last_activity: 2026-06-13 -- Plan 01-02 complete
+last_updated: "2026-06-13T18:40:49Z"
+last_activity: 2026-06-13 -- Plan 01-03 Task 1 complete; awaiting human-verify (Task 2 blocking checkpoint)
 progress:
   total_phases: 3
   completed_phases: 0
@@ -111,6 +111,10 @@ Coverage: 12/12 v0.2 requirements mapped (each to exactly one phase).
 
 - **note_command_exit surfaces any exit status** (2026-06-13): fires a LineExited entry for ANY status (0, 127, None); only the 127 wording is special. Line is RETAINED, no kill intent. Modelled on note_cwd_change.
 
+- **SpawnBoard return discarded** (2026-06-13, 01-03): `open_command_pane_in_new_tab` returns `(Option<usize>, Option<PaneId>)` which is bound to `_` (discarded). Core registers board + lines via async TabUpdate/PaneUpdate events — consistent with OpenLine's Option<PaneId> discard.
+
+- **RunCommands permission declared** (2026-06-13, 01-03): deliberate expansion from v0.1's minimal set. Enables `open_command_pane` for fan-out lines 2..N (and Phase 3 line verb). `open_command_pane_in_new_tab` still needs only ChangeApplicationState. Interactive re-grant required; operator must clear old permissions.kdl or approve on first load.
+
 ### Blockers/Concerns
 
 - **Default-agent PATH risk (Phase 1)**: `claude` may not be on the spawned
@@ -150,11 +154,19 @@ Coverage: 12/12 v0.2 requirements mapped (each to exactly one phase).
 ## Session Continuity
 
 Branch model: trunk-based on `main` (fresh project; no phase branches).
-Last session: 2026-06-13T18:27:46.245Z
-model (3 phases, numbering reset). The previous single-line-first roadmap was
-superseded.
-Next: `/gsd-plan-phase 1` to plan Board Foundation — Spawn One Board of Agents.
+Last session: 2026-06-13T18:40:49Z
+Stopped at: Plan 01-03 Task 2 (blocking human-verify checkpoint)
+Resume file: .planning/phases/01-board-foundation/01-03-PLAN.md
 
 ## Operator Next Steps
 
-- Plan Phase 1 with `/gsd-plan-phase 1`.
+- Run `tools/dev.sh reload` to deploy the debug wasm into the live Zellij session.
+- If prompted for permissions on reload, APPROVE (grant now includes RunCommands).
+  If no prompt appears and spawn silently no-ops: `rm -f "${XDG_CACHE_HOME:-$HOME/.cache}/zellij/permissions.kdl"` then reload and approve.
+- Float the switchboard and press the compose board verb (Shift+b by default).
+- Verify: one new board (tab) appears focused with 5 claude lines, each deck-keyed.
+- CB check: no spawn feedback encodes meaning red↔green (amber + text label).
+- No-drift check: pre-existing selection must not wander during the spawn burst.
+- No-kill check: if a line exits 127, it must stay in the directory; call log records the exit.
+- Check `/tmp/zellij-<uid>/zellij-log/zellij.log` for panics.
+- Type "approved" to the orchestrator once verified, or describe what went wrong.
