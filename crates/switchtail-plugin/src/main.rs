@@ -120,11 +120,28 @@ impl State {
                     focus_pane_with_id(term(line), true, false);
                     hide_self();
                 }
-                HostIntent::SwapIntoSeat { seat, line } => {
-                    // suppress=true keeps the displaced pane alive & recoverable
-                    // (focus_pane_with_id unsuppresses). True positional swap is
-                    // a post-v0.1 refinement pending empirical E2E.
+                HostIntent::SwapPanes { seat, line } => {
+                    // Composed 3-call positional exchange (no single swap
+                    // primitive exists in the plugin API):
+                    // 1. Pin the line's slot with a throwaway placeholder.
+                    let placeholder =
+                        open_terminal_pane_in_place_of_pane_id(term(line), ".", false);
+                    let Some(placeholder) = placeholder else {
+                        eprintln!(
+                            "switchtail: swap aborted — host refused placeholder pin \
+                             (seat={}, line={})",
+                            seat.0, line.0
+                        );
+                        continue;
+                    };
+                    // 2. Line takes the seat's slot; seat pane suppressed.
                     replace_pane_with_existing_pane(term(seat), term(line), true);
+                    // 3. Seat takes the placeholder's slot (= line's original
+                    //    slot); plugin-owned placeholder closes. Owner decision
+                    //    (04-06 Task 1) blesses this scoped close. The no-kill
+                    //    guard's FORBIDDEN list is untouched — suppress=false is
+                    //    a parameter of replace_pane, not a close_* shim.
+                    replace_pane_with_existing_pane(placeholder, term(seat), false);
                 }
                 HostIntent::Say { line, text } => {
                     write_chars_to_pane_id(&text, term(line));
