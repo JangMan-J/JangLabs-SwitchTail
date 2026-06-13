@@ -1,66 +1,39 @@
-# Roadmap: SwitchTail — v0.1 Switchboard Groundwork
+# Roadmap: SwitchTail
 
-## Overview
+## Milestones
 
-Build the groundwork of a highly-expandable Zellij plugin that extends
-window-manager-style control to fleets of agentic terminals: a live pane
-directory, a one-press deck, seat swapping, per-line messaging, and a
-triageable call log — all behind the `HostIntent` seam that keeps the model
-pure and every future capability a small follow-on. Facts in
-`docs/zellij-api-notes.md` are source-verified; the design contract is
-`docs/DESIGN.md`.
+- ✅ **v0.1 Switchboard Groundwork** — Phases 1–4 (shipped 2026-06-13) ·
+  archived: [`milestones/v0.1-ROADMAP.md`](milestones/v0.1-ROADMAP.md)
+- 📋 **v0.2 Composing the Exchange** — phases TBD (defining requirements)
 
 ## Phases
 
-- [x] **Phase 1: Core Model** - switchtail-core: directory, deck assignment, seat, call log, triage, sorting, protocol types — pure + TDD
-- [x] **Phase 2: Plugin Adapter** - events→core, intents→shim, ANSI render, deck/seat/say keys; wasm loads in zellij 0.45
-- [x] **Phase 3: Pipes & Protocol** - switchtail pipe ops in/out, JSON list/log dumps, register/status metadata
-- [x] **Phase 4: Operator Polish & E2E** - CB-safe attention surface, launch key, dev/install tooling, headless E2E smoke, review pass
+<details>
+<summary>✅ v0.1 Switchboard Groundwork (Phases 1–4) — SHIPPED 2026-06-13</summary>
 
-## Phase Details
+- [x] Phase 1: Core Model — completed 2026-06-12
+- [x] Phase 2: Plugin Adapter — completed 2026-06-12
+- [x] Phase 3: Pipes & Protocol — completed 2026-06-12
+- [x] Phase 4: Operator Polish & E2E — completed 2026-06-13 (UAT 9/9, gap-closure 04-05/04-06)
 
-### Phase 1: Core Model
-**Goal**: The entire switchboard model lives in `switchtail-core`, pure and unit-tested — directory ingestion from pane snapshots, sticky deck assignment, seat tracking, call log with triage and sort, wire-protocol parse/serialize, all host effects as `HostIntent`s
-**Requirements**: DIR-01, DIR-02, DIR-03, DECK-01, LOG-01, LOG-02
-**Success Criteria**:
-  1. `cargo test -p switchtail-core` green with meaningful coverage of assignment stickiness, triage transitions, ring-buffer capping, sort orders, and protocol round-trips
-  2. The crate compiles for both host and `wasm32-wasip1` with no zellij dependency
+Full detail: [`milestones/v0.1-ROADMAP.md`](milestones/v0.1-ROADMAP.md) ·
+requirements: [`milestones/v0.1-REQUIREMENTS.md`](milestones/v0.1-REQUIREMENTS.md)
 
-### Phase 2: Plugin Adapter
-**Goal**: The plugin builds to WASM, loads in zellij 0.45 under minimal declared permissions, renders directory+log views, and the operator can deck-jump, seat-swap, and patch text to a line
-**Requirements**: DECK-02, DECK-03, DECK-04, LOG-03, SHELL-01, SHELL-02
-**Success Criteria**:
-  1. `tools/dev.sh build` produces `switchtail.wasm`; `start-or-reload-plugin` loads it without panics (zellij.log clean)
-  2. Deck key focuses the right pane; `m`+`s` swaps a line into the seat; `i`-prompt text arrives in the target pane
+</details>
 
-### Phase 3: Pipes & Protocol
-**Goal**: External processes drive and query the switchboard by line ID over `zellij pipe -n switchtail` — say/focus/ring/status/register mutate, list/log answer with JSON on the pipe
-**Requirements**: PIPE-01, PIPE-02, PIPE-03
-**Success Criteria**:
-  1. Each op verified end-to-end via `zellij pipe`; malformed payloads are logged calls, never panics
-  2. `list` output parses as JSON and matches the live pane set
+### 📋 v0.2 Composing the Exchange (defining requirements)
 
-### Phase 4: Operator Polish & E2E
-**Goal**: Ringing lines are visibly surfaced CB-safely on the board, the dev/install story is one command each, a headless E2E smoke harness exists, and the whole diff has had a review pass
-**Requirements**: LOG-04, SHELL-03, SHELL-04
-**Success Criteria**:
-  1. Ring → amber tint + highlight on the target pane; answer/park clears it
-  2. `tests/e2e.sh` runs a scripted zellij session headlessly and asserts plugin load + pipe round-trip via dump-screen/pipe output
-  3. No-kill test guards the adapter; review findings fixed or recorded
-
-**UAT (2026-06-12 → closed 2026-06-13)**: live UAT found 7/9 pass + 2 major
-gaps sharing a root cause (selection stored as a drifting row index):
-test 6 (ring mistargeted under RingingFirst re-sort) and test 4 (seat swap
-was not a true positional exchange). Closed in gap-closure plans 04-05
-(identity-anchored selection) and 04-06 (composed 3-call positional swap;
-`replace_pane_with_existing_pane` proven one-way, not a swap). Re-verified
-live — Phase-4 UAT now 9/9. See 04-05-SUMMARY.md, 04-06-SUMMARY.md.
+Phases will be created by the roadmapper once v0.2 requirements are defined.
+Direction: the switchboard becomes a live composition surface — spawn boards
+and lines from inside the plugin with a parameterizable increment (verb = 1,
+verb + count = N), default agent `claude`, cwd out of scope. See
+`notes/v0.2-composing-the-exchange.md`.
 
 ## Progress
 
-| Phase | Status | Completed |
-|-------|--------|-----------|
-| 1. Core Model | Complete | 2026-06-12 |
-| 2. Plugin Adapter | Complete | 2026-06-12 |
-| 3. Pipes & Protocol | Complete | 2026-06-12 |
-| 4. Operator Polish & E2E | Complete | 2026-06-12 |
+| Phase | Milestone | Status | Completed |
+|-------|-----------|--------|-----------|
+| 1. Core Model | v0.1 | Complete | 2026-06-12 |
+| 2. Plugin Adapter | v0.1 | Complete | 2026-06-12 |
+| 3. Pipes & Protocol | v0.1 | Complete | 2026-06-12 |
+| 4. Operator Polish & E2E | v0.1 | Complete | 2026-06-13 |

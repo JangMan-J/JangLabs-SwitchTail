@@ -1,9 +1,10 @@
 ---
-status: diagnosed
+status: resolved
 phase: 04-operator-polish-e2e
 source: ROADMAP.md success criteria + STATE.md live-verification concerns (no per-phase SUMMARY.md — v0.1 built in one autonomous session)
 started: 2026-06-12T12:43:48-07:00
-updated: 2026-06-12T13:05:00-07:00
+updated: 2026-06-13T00:00:00-07:00
+resolution: "Both gaps (tests 4, 6) closed in 04-05 + 04-06 and re-verified live 2026-06-13. UAT now 9/9."
 ---
 
 ## Current Test

@@ -1,8 +1,11 @@
 ---
-status: diagnosed
+status: resolved
+resolved_in: 04-06
+resolved_date: 2026-06-13
+resolution: "Fixed by the composed 3-call positional exchange (SwapPanes intent: pin placeholder, replace, release) in 04-06. replace_pane_with_existing_pane proven one-way (host commit e9173cb). Live-verified 2026-06-13: panes trade slots exactly, FIFO ordering, suppressed-restore benign, repeatable."
 trigger: "SwitchTail seat swap (`s` key) does not perform a true positional exchange. UAT gap from Phase 4."
 created: 2026-06-12T00:00:00Z
-updated: 2026-06-12T16:00:00Z
+updated: 2026-06-13T00:00:00Z
 ---
 
 ## Current Focus

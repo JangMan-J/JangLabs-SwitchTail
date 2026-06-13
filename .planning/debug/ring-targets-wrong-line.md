@@ -1,8 +1,11 @@
 ---
-status: diagnosed
+status: resolved
+resolved_in: 04-05
+resolved_date: 2026-06-13
+resolution: "Fixed by identity-anchored selection (Option<LineId> / call seq) in 04-05. Live-verified 2026-06-13: R keeps the cursor glued to the rung line through the RingingFirst re-sort; a clears it to zero ringing lines."
 trigger: "ring-targets-wrong-line: SwitchTail ring action (R key) does not consistently surface on the line the operator actually selected. UAT gap from Phase 4."
 created: 2026-06-12T15:46:50-07:00
-updated: 2026-06-12T15:58:00-07:00
+updated: 2026-06-13T00:00:00-07:00
 ---
 
 ## Current Focus
