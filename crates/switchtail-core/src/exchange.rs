@@ -794,4 +794,112 @@ mod tests {
         assert_eq!(ex.view, View::Log);
         assert_eq!(ex.key(KeyInput::Esc), vec![HostIntent::HideSelf]);
     }
+
+    // --- 04-05 gap-closure: selection must track by identity, not row index ---
+
+    #[test]
+    fn ring_keeps_cursor_on_the_rung_line_in_ringing_first() {
+        // Sparse ids (0,1,2,4) mirror the live-dump reconstruction.
+        let mut ex = exchange_with(vec![
+            pane(0, "a"),
+            pane(1, "b"),
+            pane(2, "c"),
+            pane(4, "d"),
+        ]);
+        // Cycle sort to RingingFirst.
+        ex.key(KeyInput::Char('o'));
+        assert_eq!(ex.sort, SortMode::RingingFirst);
+        // Navigate cursor to line 2 (deck sort within ringing-first: 0,1,2,4).
+        // selected starts at first line (id 0). j twice → line 2.
+        ex.key(KeyInput::Down);
+        ex.key(KeyInput::Down);
+        assert_eq!(ex.selected_line(), Some(LineId(2)));
+
+        // Ring the selected line. In RingingFirst sort, refresh_ring_flags()
+        // re-sorts line 2 to the top. The cursor must stay on line 2.
+        ex.key(KeyInput::Char('R'));
+        assert_eq!(
+            ex.selected_line(),
+            Some(LineId(2)),
+            "cursor drifted after R in RingingFirst sort"
+        );
+
+        // Answer: must settle line 2, not a neighbor.
+        ex.key(KeyInput::Char('a'));
+        let line2 = ex.lines().find(|l| l.id == LineId(2)).unwrap();
+        assert!(!line2.ringing, "answer did not clear line 2's ring");
+        // No residual rings anywhere.
+        assert!(
+            ex.lines().all(|l| !l.ringing),
+            "residual ringing line after answer"
+        );
+    }
+
+    #[test]
+    fn selection_follows_line_across_pipe_ring_resort() {
+        let mut ex = exchange_with(vec![pane(1, "a"), pane(2, "b"), pane(3, "c")]);
+        ex.key(KeyInput::Char('o')); // RingingFirst
+        // Cursor on line 1 (first row).
+        assert_eq!(ex.selected_line(), Some(LineId(1)));
+        // Pipe ring on a DIFFERENT line re-sorts the view.
+        ex.pipe_op(r#"{"op":"ring","line":3}"#, None);
+        assert_eq!(
+            ex.selected_line(),
+            Some(LineId(1)),
+            "cursor drifted after pipe ring on another line"
+        );
+    }
+
+    #[test]
+    fn selection_survives_line_close_index_shift() {
+        let mut ex = exchange_with(vec![pane(1, "a"), pane(2, "b"), pane(3, "c")]);
+        // Cursor on line 3 (j j from line 1).
+        ex.key(KeyInput::Down);
+        ex.key(KeyInput::Down);
+        assert_eq!(ex.selected_line(), Some(LineId(3)));
+        // Close line 1: snapshot without it. Indices shift — line 3 must stay.
+        ex.ingest_panes(vec![pane(2, "b"), pane(3, "c")]);
+        assert_eq!(
+            ex.selected_line(),
+            Some(LineId(3)),
+            "cursor drifted after line close shifted indices"
+        );
+        // Close line 3 itself: selection falls back gracefully.
+        ex.ingest_panes(vec![pane(2, "b")]);
+        assert!(
+            ex.selected_line().is_some(),
+            "selection should fall back to remaining line"
+        );
+    }
+
+    #[test]
+    fn log_selection_follows_call_seq_across_triage_resort() {
+        let mut ex = exchange_with(vec![pane(1, "a"), pane(2, "b")]);
+        // Place two ring calls.
+        ex.pipe_op(r#"{"op":"ring","line":1}"#, None);
+        ex.pipe_op(r#"{"op":"ring","line":2}"#, None);
+        // Switch to log view, RingingFirst sort.
+        ex.key(KeyInput::Tab);
+        ex.key(KeyInput::Char('o')); // RingingFirst
+        // Log view newest-first + ringing-first: both calls are Ringing.
+        // Select the second row (j once).
+        ex.key(KeyInput::Down);
+        let anchor_seq = ex.selected_call_seq();
+        assert!(anchor_seq.is_some(), "no call selected");
+        let anchor_line = ex.selected_line();
+        // Answer a DIFFERENT call via pipe, which re-sorts the log.
+        let other_line = if anchor_line == Some(LineId(1)) {
+            LineId(2)
+        } else {
+            LineId(1)
+        };
+        ex.log.settle_line(other_line, Triage::Answered);
+        ex.refresh_ring_flags();
+        // The originally-selected call must still be the anchor.
+        assert_eq!(
+            ex.selected_call_seq(),
+            anchor_seq,
+            "log cursor drifted after triage re-sort"
+        );
+    }
 }
