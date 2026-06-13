@@ -45,7 +45,9 @@ pub trait ZellijPlugin: Default {
 ```rust
 subscribe(event_types: &[EventType]); request_permission(permissions: &[PermissionType]);
 focus_pane_with_id(pane_id: PaneId, should_float_if_hidden: bool, should_be_in_place_if_hidden: bool);
-replace_pane_with_existing_pane(pane_id_to_replace: PaneId, existing_pane_id: PaneId, suppress_replaced_pane: bool); // seat swap
+replace_pane_with_existing_pane(pane_id_to_replace: PaneId, existing_pane_id: PaneId, suppress_replaced_pane: bool); // one-way "bring pane here" (pane-picker primitive), NOT a swap; suppress=false CLOSES the replaced pane
+open_terminal_pane_in_place_of_pane_id<P: AsRef<Path>>(pane_id: PaneId, cwd: P, close_replaced_pane: bool) -> Option<PaneId>; // close_replaced_pane=false ⇒ replaced pane suppressed, restored when the new pane closes
+move_pane_with_pane_id_in_direction(pane_id: PaneId, direction: Direction); // TRUE positional swap, adjacent pane in a direction only (deferred shortcut)
 write_chars_to_pane_id(chars: &str, pane_id: PaneId);   write_to_pane_id(bytes: Vec<u8>, pane_id: PaneId);
 open_command_pane(cmd: CommandToRun, ctx: BTreeMap<String,String>) -> Option<PaneId>; // + _background / _floating / _near_plugin variants, same shape
 open_terminal<P: AsRef<Path>>(path: P) -> Option<PaneId>;
@@ -137,3 +139,28 @@ output (handy tracing channel).
 - Headless boot works fine via `script -qec "stty cols 140 rows 40; zellij
   --session <name>" /dev/null &`, then `zellij --session <name> action …`
   from outside the pty.
+- **`replace_pane_with_existing_pane` is one-way, NOT a swap** (proven at host
+  commit e9173cb: screen.rs:4486, tab/mod.rs:4069 `extract_pane`,
+  tab/mod.rs:2337 `suppress_pane_and_replace_with_other_pane`). It is the
+  pane-picker primitive: the host extracts `existing_pane_id`, places it in
+  `pane_id_to_replace`'s geometry, and either suppresses the replaced pane
+  (`suppress=true`, recoverable via `focus_pane_with_id`) or **closes** it
+  (`suppress=false`). The replaced pane is never placed into the existing
+  pane's old slot — there is no positional exchange.
+- **No `swap_panes(a,b)` primitive exists** anywhere in the plugin API
+  (exhaustive PluginCommand scan, zellij-utils 0.44.3 + host commit e9173cb).
+- **Composed positional exchange (the seat-swap recipe)** — to make panes A
+  and B trade slots with the layout otherwise unchanged:
+  1. `open_terminal_pane_in_place_of_pane_id(B, ".", false)` → placeholder P
+     pins B's slot (B becomes suppressed but stays pid-addressable; the host
+     `extract_pane` has a suppressed-pane branch).
+  2. `replace_pane_with_existing_pane(A, B, true)` → B takes A's slot, A
+     suppressed (still addressable).
+  3. `replace_pane_with_existing_pane(P, A, false)` → A takes P's slot
+     (= B's original slot); plugin-owned P closes.
+  The three plugin commands process in dispatch order (FIFO). [Live FIFO +
+  suppressed-restore findings to be appended after 04-06 Task 4.]
+- **`move_pane_with_pane_id_in_direction(pane_id, direction)` IS a true
+  positional swap**, but only with the adjacent pane in the given direction —
+  a cheaper shortcut for the adjacent common case (deferred; needs geometry
+  in PaneSnapshot + adjacency math in core).

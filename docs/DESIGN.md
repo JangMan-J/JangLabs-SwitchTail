@@ -32,9 +32,10 @@ it names every type, module, and key in the system:
   the core's view model as ANSI rows. No business logic.
 
 The adapter emits **intents** (`enum HostIntent { FocusLine(LineId),
-SwapIntoSeat{..}, Say{..}, Ring{..}, … }`) returned by core operations, so the
+SwapPanes{..}, Say{..}, Ring{..}, … }`) returned by core operations, so the
 core stays host-free and the shim layer stays a dumb dispatcher — this is the
 expandability seam: new capability = new intent + one dispatcher arm.
+(`SwapPanes` is the one sanctioned composed transaction — see capability 3.)
 
 ## v0.1 capabilities (groundwork)
 
@@ -46,8 +47,17 @@ expandability seam: new capability = new intent + one dispatcher arm.
    first. Pressing the key patches focus through:
    `focus_pane_with_id(line, true, false)`.
 3. **Seat swap (hot-seat)** — `m` marks the selected line as the seat;
-   pressing `s` on a selection swaps it into the seat via
-   `replace_pane_with_existing_pane(seat, selected, false)`.
+   pressing `s` on a selection performs a *true positional exchange* — the
+   two panes trade slots, the layout is otherwise unchanged, and nothing is
+   left suppressed. There is no single swap primitive in the plugin API, so
+   the adapter composes it as a 3-call transaction:
+   (1) `open_terminal_pane_in_place_of_pane_id(line, ".", false)` pins the
+   line's slot with a throwaway placeholder, (2)
+   `replace_pane_with_existing_pane(seat, line, true)` moves the line into
+   the seat's slot, (3) `replace_pane_with_existing_pane(placeholder, seat,
+   false)` moves the seat into the line's old slot and closes the
+   placeholder. The seat marker then **follows the position**: the line now
+   occupying the seat slot becomes the new seat.
 4. **Patch-through messaging** —
    - *Inbound to a line:* select + `i` opens an input prompt in the plugin;
      Enter sends via `write_chars_to_pane_id` (with `\r` termination optional
