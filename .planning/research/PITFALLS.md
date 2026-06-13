@@ -149,7 +149,7 @@ Permissions are declared in `load()` and granted once interactively. If v0.2 cal
 - Before any new API call in v0.2, grep the vendored crate source to confirm which permission it guards. Do not assume from docs.
 - Adding a permission is an owner decision (per CLAUDE.md). Document the decision in `PROJECT.md` key decisions before merging.
 - When testing a new permission, clear `~/.cache/zellij/permissions.kdl` (or the `XDG_CACHE_HOME` equivalent) to force re-grant. The e2e harness pre-seeds an isolated cache — update it when permissions change.
-- `RunCommands` is explicitly withheld and must remain so for v0.2. If `claude` requires `RunCommands` to spawn, find an alternative (it does not — `open_command_pane` uses `OpenTerminalsOrPlugins`).
+- **CORRECTED 2026-06-13:** `open_command_pane` requires **`RunCommands`** (verified against Zellij's official command reference — NOT `OpenTerminalsOrPlugins`; the earlier claim here was wrong). Owner decision: v0.2 **declares `RunCommands`** to spawn `claude` lines natively (see PROJECT.md key decisions + research/STACK.md). So the grant cache MUST be cleared/re-seeded for the new permission. `open_command_pane_in_new_tab` (board spawn) needs only `ChangeApplicationState`, already declared.
 
 **Warning signs:**
 - A spawn call returns `None` (for `open_terminal` / `open_command_pane`) with no pane appearing and no log entry.

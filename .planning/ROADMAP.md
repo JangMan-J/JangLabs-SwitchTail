@@ -24,78 +24,103 @@ requirements: [`milestones/v0.1-REQUIREMENTS.md`](milestones/v0.1-REQUIREMENTS.m
 
 ### 🚧 v0.2 Composing the Exchange
 
-Numbering reset to Phase 1 (owner directive; v0.1 archived).
+Numbering reset to Phase 1 (owner directive; v0.1 archived). The unit of
+composition is a **board of agent lines** (default 5 `claude` lines), so a board
+of N is foundational, not deferred.
 
-- [ ] **Phase 1: Composition Core + Single-Line Spawn** - Mid-bind compose
-  sub-state, default-agent `claude` line spawn (N=1), digit/deck-key collision
-  gate, exit-127 surfaced no-kill.
-- [ ] **Phase 2: Board Spawn** - `OpenBoard` intent + native
-  `open_command_pane_in_new_tab` adapter arm; spawn one board carrying one line.
-- [ ] **Phase 3: Multi-Spawn (N>1) + Deck-Cap Guardrail** - Count fan-out for
-  lines and boards (verb + digit 1–9), deck-exhaustion warning, selection-drift
-  regression under N sequential reconciliations.
+- [ ] **Phase 1: Board Foundation — Spawn One Board of Agents** - Modifier-aware
+  key model + config + the board verb spawning ONE default-size board of `claude`
+  lines (bare, N=1), with async board-fill reconciliation, default-agent-in-core,
+  deck-cap warning, and exit-127 surfaced no-kill.
+- [ ] **Phase 2: Count Grammar — N Boards in One Gesture** - The count-entry
+  sub-state (verb + digit 1–9, Esc aborts) and its CB-safe status-line indicator,
+  upgrading the board verb to N boards of the default size.
+- [ ] **Phase 3: Line Verb — Top Up the Current Board** - The secondary line verb
+  that adds individual `claude` lines to the current board (bare = 1, verb + count
+  = N), reusing the count grammar from Phase 2.
 
 ## Phase Details
 
-### Phase 1: Composition Core + Single-Line Spawn
-**Goal**: The operator can press one compose verb and immediately get a new line
-on the current board running the default agent (`claude`) — building the
-exchange by hand with the "press → it happens" feel, with the mid-bind grammar
-visible and abortable, and a failed command surfaced rather than swept away.
+### Phase 1: Board Foundation — Spawn One Board of Agents
+**Goal**: The operator can press one board compose verb and immediately get a
+new board (tab) staffed with the default number of `claude` lines (5) — the
+board-of-agents unit, live, with the "press → it happens" feel. This phase
+lays the modifier-aware key foundation every verb needs and proves async
+board-fill reconciliation under the real Zellij event model.
 **Depends on**: Nothing (first v0.2 phase; builds on the shipped v0.1 core)
-**Requirements**: COMP-01, COMP-02, COMP-06, COMP-07, COMP-08, COMP-10
+**Requirements**: COMP-01, COMP-02, COMP-03, COMP-09, COMP-10, COMP-11, COMP-12
 **Success Criteria** (what must be TRUE):
-  1. The operator presses the line compose verb and exactly one new line appears
-     on the current board, gets the next deck key, and runs `claude` by default.
-  2. The operator can configure a different command (including bare shell as the
-     explicit opt-out) and the spawned line runs that instead of `claude`.
-  3. After pressing the compose verb the operator is in a count-entry sub-state
-     where digit keys accumulate a count instead of jumping to a deck line, and
-     pressing Esc returns to normal mode without spawning anything.
-  4. While in count-entry the operator sees a CB-safe indication (blue↔amber +
-     text label, never red↔green) of the pending verb, so the mid-bind state is
-     never invisible.
-  5. A spawned line whose command exits immediately (e.g. `claude` not on PATH,
+  1. The operator presses the board compose verb once and exactly one new board
+     appears, becomes focused, and carries the default number of `claude` lines
+     (5), each assigned a deck key (the first board of 5 fills 5 of the 10 deck
+     slots — within capacity).
+  2. Each spawned line runs the configured default agent (`claude`); changing
+     the configured default lines-per-board changes how many lines a freshly
+     spawned board carries, and a bare-shell line is reachable as the explicit
+     `n` opt-out.
+  3. The board's tab and its lines arrive via later TabUpdate/PaneUpdate events
+     yet reconcile correctly — every line lands on the intended new board, and a
+     line selected before the gesture stays selected on the same identity (no
+     cursor drift) throughout the spawn burst.
+  4. A spawned line whose command exits immediately (e.g. `claude` not on PATH,
      exit 127) shows as a call-log entry and stays in the directory; the plugin
-     never closes or kills the pane (no-kill discipline preserved).
+     never closes or kills any pane (no-kill discipline preserved).
+  5. The board compose verb is read from config as a Shift/Super-modified binding
+     (off Zellij's Ctrl/Alt), and the core key model + adapter key mapping carry
+     that modifier information rather than a bare character.
 **Plans**: TBD
+**UI hint**: yes
 
-### Phase 2: Board Spawn
-**Goal**: The operator can press one compose verb and immediately get a new
-board (tab) that already carries one line running the default agent — growing
-the exchange a board at a time, the way Zellij itself opens a tab.
-**Depends on**: Phase 1 (reuses the compose sub-state, `agent_command`
-resolution, and exit-127 surfacing established there)
-**Requirements**: COMP-04
+### Phase 2: Count Grammar — N Boards in One Gesture
+**Goal**: The operator can spawn N boards of agents in a single gesture — board
+verb followed by a digit 1–9 — and the mid-bind state is never invisible. This
+phase adds the count-entry sub-state (cloned from v0.1's Prompt pattern, gated
+at the top of `key()` so digits do not collide with deck-jump) and its CB-safe
+status-line indicator.
+**Depends on**: Phase 1 (the board verb, modifier key model, async board-fill
+reconciliation, and the deck-cap warning are all established there)
+**Requirements**: COMP-04, COMP-06, COMP-07, COMP-08
 **Success Criteria** (what must be TRUE):
-  1. The operator presses the board compose verb and exactly one new board
-     appears, becomes focused, and carries one line running `claude` by default.
-  2. The new board's line is surfaced as a call-log entry and shows in the
-     directory once its `TabUpdate`/`PaneUpdate` arrives — the operator sees the
-     board land, not a silent no-op.
-  3. The board verb behaves identically to the line verb's mid-bind grammar: a
-     bare press spawns one board, and Esc during count-entry aborts cleanly.
+  1. The operator presses the board verb then a single digit 1–9 and that many
+     boards appear, each carrying the default number of `claude` lines (verb+3 →
+     3 boards of 5 = 15 agents).
+  2. After the board verb the operator is in a count-entry sub-state where digit
+     keys accumulate the count instead of jumping to a deck line; a digit fires
+     the count immediately and Esc aborts the sub-state without spawning anything
+     or mutating the exchange.
+  3. A bare board verb with no following count acts in unit — exactly one board
+     of the default size — preserving the Phase 1 "press and it happens" feel.
+  4. While the board verb is pending the operator sees a CB-safe status-line
+     indication of the pending verb and accumulating count (blue↔amber + text,
+     never red↔green), so the mid-bind state is always visible.
+  5. Spawning 2+ boards exceeds the deck's 10-key capacity (2 boards of 5 = 10,
+     3 = 15); the overflow lines still spawn but are surfaced with the CB-safe
+     deck-cap call-log warning from Phase 1 — never silently dropped or capped.
 **Plans**: TBD
+**UI hint**: yes
 
-### Phase 3: Multi-Spawn (N>1) + Deck-Cap Guardrail
-**Goal**: The operator can fill the exchange in one gesture — verb followed by a
-digit 1–9 spawns that many lines (or boards) at once — and is never surprised:
-spawns past the deck's key capacity still happen but are flagged, and the
-selection never wanders during the spawn burst.
-**Depends on**: Phase 1 (compose sub-state, line spawn) and Phase 2 (board spawn)
-**Requirements**: COMP-03, COMP-05, COMP-09
+### Phase 3: Line Verb — Top Up the Current Board
+**Goal**: The operator can add individual `claude` lines to the current board
+with a second, separate line compose verb — bare adds exactly one line, verb +
+count (1–9) adds that many — letting the operator top up a specific board after
+the board-level composition of Phases 1–2.
+**Depends on**: Phase 1 (default-agent resolution, async line reconciliation,
+deck-cap warning) and Phase 2 (the count-entry sub-state + status-line indicator
+the line verb reuses unchanged)
+**Requirements**: COMP-05
 **Success Criteria** (what must be TRUE):
-  1. The operator presses the line verb then a digit 1–9 and that many lines
-     appear on the current board in one gesture (a trunk of N parallel lines).
-  2. The operator presses the board verb then a digit 1–9 and that many boards
-     appear, each staffed with one line running the default agent.
-  3. When a spawn would exceed the deck's finite key capacity the line(s) still
-     spawn, but the operator gets a CB-safe call-log warning (amber + text) that
-     the overflow line(s) have no deck key — never a silent drop or cap.
-  4. If a line was selected before the gesture, it stays selected on the same
-     identity throughout the N sequential reconciliations — the cursor does not
-     drift to another row during the spawn burst.
+  1. The operator presses the line compose verb (bare) and exactly one new
+     `claude` line is added to the current board, taking the next deck key.
+  2. The operator presses the line verb then a single digit 1–9 and that many
+     `claude` lines are added to the current board in one gesture (a trunk of N
+     parallel lines), reusing the same count-entry grammar and status-line
+     indicator as the board verb.
+  3. The line verb is a configurable Shift/Super binding distinct from the board
+     verb, and when adding lines would push a board past the deck's 10-key
+     capacity the overflow lines still spawn but carry the CB-safe deck-cap
+     warning — never a silent drop or cap.
 **Plans**: TBD
+**UI hint**: yes
 
 ## Progress
 
@@ -105,6 +130,6 @@ selection never wanders during the spawn burst.
 | 2. Plugin Adapter | v0.1 | — | Complete | 2026-06-12 |
 | 3. Pipes & Protocol | v0.1 | — | Complete | 2026-06-12 |
 | 4. Operator Polish & E2E | v0.1 | — | Complete | 2026-06-13 |
-| 1. Composition Core + Single-Line Spawn | v0.2 | 0/0 | Not started | - |
-| 2. Board Spawn | v0.2 | 0/0 | Not started | - |
-| 3. Multi-Spawn + Deck-Cap Guardrail | v0.2 | 0/0 | Not started | - |
+| 1. Board Foundation — Spawn One Board of Agents | v0.2 | 0/0 | Not started | - |
+| 2. Count Grammar — N Boards in One Gesture | v0.2 | 0/0 | Not started | - |
+| 3. Line Verb — Top Up the Current Board | v0.2 | 0/0 | Not started | - |

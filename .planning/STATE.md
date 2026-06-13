@@ -3,7 +3,7 @@ gsd_state_version: 1.0
 milestone: v0.2
 milestone_name: Composing the Exchange
 status: planning
-last_updated: "2026-06-13T13:47:11.143Z"
+last_updated: "2026-06-13T00:00:00.000Z"
 last_activity: 2026-06-13
 progress:
   total_phases: 3
@@ -20,15 +20,18 @@ progress:
 See: .planning/PROJECT.md (created 2026-06-12, fresh-slate restart)
 
 **Core value:** one-handed fleet control without losing the overview.
-**Current focus:** v0.2 Composing the Exchange — roadmap set (3 phases,
-numbering reset to 1). Next: plan Phase 1.
+**Current focus:** v0.2 Composing the Exchange — roadmap RE-CREATED against the
+corrected board-of-agents model (3 phases, numbering reset to 1). The unit of
+composition is a **board of agent lines** (default 5 `claude`), so a board of N
+is foundational, not deferred. Next: plan Phase 1.
 
 ## Current Position
 
-Phase: 1 — Composition Core + Single-Line Spawn (not started)
+Phase: 1 — Board Foundation — Spawn One Board of Agents (not started)
 Plan: —
-Status: Roadmap created; ready to plan Phase 1
-Last activity: 2026-06-13 — v0.2 roadmap created (Phases 1–3, numbering reset)
+Status: Roadmap re-created; ready to plan Phase 1
+Last activity: 2026-06-13 — v0.2 roadmap re-derived from REVISED requirements
+(board-of-agents model; the prior single-line-first roadmap was superseded)
 
 Progress: [..........................] 0% (0/3 phases)
 
@@ -36,38 +39,56 @@ Progress: [..........................] 0% (0/3 phases)
 
 | Phase | Goal | Requirements |
 |-------|------|--------------|
-| 1. Composition Core + Single-Line Spawn | Press a verb → one `claude` line on the current board; mid-bind grammar visible/abortable; exit-127 surfaced no-kill | COMP-01, 02, 06, 07, 08, 10 |
-| 2. Board Spawn | Press a verb → one new board carrying one default-agent line, via native `open_command_pane_in_new_tab` | COMP-04 |
-| 3. Multi-Spawn (N>1) + Deck-Cap Guardrail | Verb + digit 1–9 → N lines or N boards; deck-cap warning; no selection drift | COMP-03, 05, 09 |
+| 1. Board Foundation — Spawn One Board of Agents | Press the board verb → one default-size board (5 `claude` lines), focused; modifier-aware key model + config; async board-fill reconciled (no drift); deck-cap warning; exit-127 surfaced no-kill | COMP-01, 02, 03, 09, 10, 11, 12 |
+| 2. Count Grammar — N Boards in One Gesture | Board verb + digit 1–9 → N boards of 5; count-entry sub-state (digit fires, Esc aborts, no deck collision); CB-safe status-line indicator; bare verb = 1 board | COMP-04, 06, 07, 08 |
+| 3. Line Verb — Top Up the Current Board | Second line verb adds `claude` lines to the current board (bare = 1, verb + count = N), reusing the Phase 2 count grammar | COMP-05 |
 
-Coverage: 10/10 v0.2 requirements mapped (each to exactly one phase).
+Coverage: 12/12 v0.2 requirements mapped (each to exactly one phase).
 
 ## Accumulated Context
 
 ### Decisions
 
+- **CORRECTED MODEL (2026-06-13): the unit of composition is a board of agent
+  lines, NOT a single line.** A bare board verb spawns 1 board of the default
+  size (5 `claude` lines); the count multiplies BOARDS (verb+3 → 3 boards of 5).
+  A second LINE verb adds individual lines to the current board. The prior
+  single-line-first roadmap (board carrying ONE line; board-of-5 deferred) was
+  built against superseded requirements and has been replaced.
+
+- **Board-of-N is foundational, so async board-fill is in scope from Phase 1.**
+  Spawning a board of 5 = `open_command_pane_in_new_tab` (line 1, creates +
+  focuses the board) then `open_command_pane` ×4 in the SAME dispatch Vec; the
+  host processes FIFO so all 4 land on the new board before any TabUpdate
+  arrives. The tab + lines then reconcile via later TabUpdate/PaneUpdate without
+  drifting a pre-existing selection (identity anchor from v0.1).
+
 - **v0.2 declares the `RunCommands` permission** (owner decision, 2026-06-13) —
   a deliberate addition to the v0.1 minimal set. Enables native
-  `open_command_pane` so composed lines can run `claude` as the default agent.
-  The `open_terminal` + `write_chars` workaround was evaluated and rejected.
-  Re-grant required: clear `XDG_CACHE_HOME/zellij/permissions.kdl` and the e2e
-  isolated cache when the permission is added.
+  `open_command_pane` so the board-fill lines (lines 2–N on a new board, and the
+  Phase 3 line verb) can run `claude` as the default agent.
+  `open_command_pane_in_new_tab` (the first line of each board) needs only the
+  already-declared `ChangeApplicationState`; `open_command_pane` on an existing
+  focused board needs `RunCommands`. The `open_terminal` + `write_chars`
+  workaround was evaluated and rejected. Re-grant required: clear
+  `XDG_CACHE_HOME/zellij/permissions.kdl` and the e2e isolated cache when the
+  permission is added.
 
-- **v0.2 build order = research-recommended slices**: Phase 1 (compose
-  sub-state + single line, N=1, all the collision/exit-127 risk) → Phase 2
-  (board spawn, orthogonal) → Phase 3 (count fan-out, async-reconciliation
-  risk). Single-spawn phases carry no async race; N-spawn is layered last.
+- **Modifier-carrying key model is foundational (Phase 1).** v0.1's bare
+  `Char(c)` cannot express Shift/Super; the core `KeyInput` model + adapter key
+  mapping must carry modifier info so verb bindings can be configurable Shift/
+  Super defaults (off Zellij's Ctrl/Alt). Needed before any verb is bound.
 
-- **Compose is pure core** (mirrors the v0.1 `Prompt` sub-state): a
-  `Compose`/`ComposeVerb` state in exchange.rs, gated at the TOP of `key()`
-  before deck dispatch so digits 1–9 accumulate a count instead of jumping.
-  Default-command resolution and the count fan-out (N intents in one returned
-  Vec, NOT a batched intent) live in core; the adapter stays dumb.
+- **Compose grammar is pure core** (mirrors the v0.1 `Prompt` sub-state): a
+  `Compose`/`ComposeVerb` count-entry state in exchange.rs, gated at the TOP of
+  `key()` before deck dispatch so digits 1–9 accumulate a count instead of
+  deck-jumping. Esc aborts. Default-command resolution and the count fan-out
+  (N intents in one returned Vec, NOT a batched intent) live in core; the
+  adapter stays dumb (new capability = new intent + one dispatcher arm).
 
-- New board intent: `HostIntent::OpenBoard`; adapter arm uses
-  `open_command_pane_in_new_tab` (returns `(tab_id, pane_id)`, requires the
-  already-declared `ChangeApplicationState`). Verify the exact shim signature
-  from vendored `zellij-tile-0.44.3` source during Phase 2 planning.
+- **Default-command resolution lives in CORE.** Default agent = `claude`,
+  default board size = 5 (both configurable). Core emits fully-resolved
+  `OpenLine`/`SpawnBoard` intents; the adapter never re-derives the command.
 
 - Fresh slate executed: kitty era archived (tag `kitty-era-final`,
   `~/JangLabs/.archive/switchtail-kitty-era/` incl. RESTORE.md). v0.1 phase
@@ -75,12 +96,15 @@ Coverage: 10/10 v0.2 requirements mapped (each to exactly one phase).
 
 - zellij-tile pinned 0.44.3 against host zellij 0.45.0; API source-verified
   (docs/zellij-api-notes.md). Web/docs summaries were wrong on signatures —
-  always verify from vendored source.
+  always verify from vendored source. Verify the exact
+  `open_command_pane_in_new_tab` signature during Phase 1 planning.
 
 - Core/adapter split with HostIntent seam (docs/DESIGN.md). One intent = one
-  shim call (SwapPanes composed transaction is the sole exception).
+  shim call (SwapPanes composed transaction is the sole exception). Every
+  phase's core logic must be unit-testable without a Zellij host.
 
-- Vocabulary seeded as domain language per owner mid-task directive.
+- Vocabulary seeded as domain language per owner mid-task directive
+  (board = tab, line = pane, deck, trunk, exchange, operator).
 
 ### Blockers/Concerns
 
@@ -90,10 +114,18 @@ Coverage: 10/10 v0.2 requirements mapped (each to exactly one phase).
   `LineExited` call-log entry; never close the pane. Document that
   `agent_command` should be an absolute path or a guaranteed-PATH wrapper.
 
-- **Selection drift under N-spawn (Phase 3)**: N panes = N sequential
-  `PaneUpdate` events, each re-ingesting/re-ranking. Selection is already
-  identity-anchored (`selected_line_id`) from v0.1 — confirm no regression with
-  a `spawn_n_panes_selection_does_not_drift` test.
+- **Selection drift under board-fill / N-spawn**: spawning a board of 5 (Phase 1)
+  and N boards (Phase 2) emits many sequential PaneUpdate/TabUpdate events, each
+  re-ingesting/re-ranking. Selection is already identity-anchored
+  (`selected_line_id`) from v0.1 — confirm no regression with a
+  `spawn_board_fill_selection_does_not_drift` test in Phase 1 and extend for
+  N boards in Phase 2.
+
+- **Deck-cap matters from Phase 1**: the deck has 10 keys. One board of 5 uses 5
+  (within capacity), but 2 boards already = 10 and 3 = 15 (Phase 2 exceeds it).
+  Build the CB-safe deck-cap warning (amber + text, never red) in core in Phase 1
+  so it is fully exercised in Phase 2 — spawn past capacity but never silently
+  drop or cap.
 
 - Release wasm builds (lto=true) SIGSEGV rustc on this box under load — deploy
   the DEBUG wasm via `tools/dev.sh reload`; never `cargo build --release` here.
@@ -113,8 +145,10 @@ Coverage: 10/10 v0.2 requirements mapped (each to exactly one phase).
 ## Session Continuity
 
 Branch model: trunk-based on `main` (fresh project; no phase branches).
-Last session: 2026-06-13 — v0.2 roadmap created (3 phases, numbering reset).
-Next: `/gsd-plan-phase 1` to plan Composition Core + Single-Line Spawn.
+Last session: 2026-06-13 — v0.2 roadmap RE-CREATED against the board-of-agents
+model (3 phases, numbering reset). The previous single-line-first roadmap was
+superseded.
+Next: `/gsd-plan-phase 1` to plan Board Foundation — Spawn One Board of Agents.
 
 ## Operator Next Steps
 
