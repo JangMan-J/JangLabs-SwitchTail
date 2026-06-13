@@ -75,15 +75,16 @@ REQ-ID prefix `COMP-` (composition); numbering is fresh for this milestone.
 
 | REQ-ID | Phase | Status |
 |--------|-------|--------|
-| COMP-01 | — | pending |
-| COMP-02 | — | pending |
-| COMP-03 | — | pending |
-| COMP-04 | — | pending |
-| COMP-05 | — | pending |
-| COMP-06 | — | pending |
-| COMP-07 | — | pending |
-| COMP-08 | — | pending |
-| COMP-09 | — | pending |
-| COMP-10 | — | pending |
+| COMP-01 | Phase 1 | pending |
+| COMP-02 | Phase 1 | pending |
+| COMP-03 | Phase 3 | pending |
+| COMP-04 | Phase 2 | pending |
+| COMP-05 | Phase 3 | pending |
+| COMP-06 | Phase 1 | pending |
+| COMP-07 | Phase 1 | pending |
+| COMP-08 | Phase 1 | pending |
+| COMP-09 | Phase 3 | pending |
+| COMP-10 | Phase 1 | pending |
 
-*(Phase column filled by the roadmapper.)*
+*(Phase column filled by the roadmapper. Coverage: 10/10 v0.2 requirements
+mapped, each to exactly one phase.)*
