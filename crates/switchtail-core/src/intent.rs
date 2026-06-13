@@ -1,8 +1,15 @@
-//! Host effects the core wants performed. The plugin adapter dispatches each
-//! intent as exactly one zellij shim call. This seam is the expandability
-//! contract: new capability = new intent + one dispatcher arm.
+//! Host effects the core wants performed. Each intent is exactly one host
+//! EFFECT; the adapter dispatches it as one shim call — except `SwapPanes`,
+//! the one sanctioned composed transaction (3 calls: pin placeholder, replace
+//! seat, release placeholder). The placeholder PaneId is host-allocated
+//! mid-sequence and never crosses the core/adapter seam, so per-call intents
+//! are impossible without corrupting the seam. The business decision ("exchange
+//! these two lines") stays in core; the 3-call mechanics are host-API plumbing.
 //!
-//! Deliberately absent, forever-by-default: any close/kill intent.
+//! Deliberately absent, forever-by-default: any close/kill intent. The
+//! placeholder close in SwapPanes is a parameter of `replace_pane_with_
+//! existing_pane(suppress=false)` scoped to plugin-owned scaffolding, per
+//! owner decision (04-06 Task 1).
 
 use crate::line::LineId;
 
@@ -10,8 +17,11 @@ use crate::line::LineId;
 pub enum HostIntent {
     /// Focus a line (any board; unsuppress/float if hidden).
     FocusLine(LineId),
-    /// Swap `line` into the seat position (replace seat pane with line).
-    SwapIntoSeat { seat: LineId, line: LineId },
+    /// True positional exchange: seat pane and line trade slots, layout
+    /// otherwise unchanged, nothing left suppressed. Dispatched by the adapter
+    /// as the composed 3-call placeholder transaction because the host has no
+    /// single swap primitive and the placeholder id is host-allocated.
+    SwapPanes { seat: LineId, line: LineId },
     /// Type text into a line.
     Say { line: LineId, text: String },
     /// Retitle a line (native rename — no typing into the pane).

@@ -252,7 +252,16 @@ impl Exchange {
             }
             KeyInput::Char('s') => match (self.seat, self.selected_line()) {
                 (Some(seat), Some(line)) if seat != line => {
-                    vec![HostIntent::SwapIntoSeat { seat, line }]
+                    self.log.place(
+                        None,
+                        CallKind::Info,
+                        format!(
+                            "line {} swapped into the seat, line {} to its slot",
+                            line.0, seat.0
+                        ),
+                    );
+                    self.seat = Some(line);
+                    vec![HostIntent::SwapPanes { seat, line }]
                 }
                 (None, _) => {
                     self.log.place(
@@ -700,17 +709,40 @@ mod tests {
         assert!(ex.key(KeyInput::Char('s')).is_empty());
         // mark selected (first) as seat, select second, swap
         ex.key(KeyInput::Char('m'));
+        assert_eq!(ex.seat, Some(LineId(1)));
         ex.key(KeyInput::Down);
         assert_eq!(
             ex.key(KeyInput::Char('s')),
-            vec![HostIntent::SwapIntoSeat {
+            vec![HostIntent::SwapPanes {
                 seat: LineId(1),
                 line: LineId(2)
             }]
         );
+        // seat follows the position: now line 2 is the seat
+        assert_eq!(ex.seat, Some(LineId(2)));
         // closing the seat clears it
-        ex.ingest_panes(vec![pane(2, "b")]);
+        ex.ingest_panes(vec![pane(1, "a")]);
         assert_eq!(ex.seat, None);
+    }
+
+    #[test]
+    fn seat_follows_position_across_chained_swaps() {
+        let mut ex = exchange_with(vec![pane(1, "a"), pane(2, "b"), pane(3, "c")]);
+        // m on line 1 (seat), select line 2, swap
+        ex.key(KeyInput::Char('m'));
+        ex.key(KeyInput::Down);
+        ex.key(KeyInput::Char('s'));
+        assert_eq!(ex.seat, Some(LineId(2)));
+        // select line 3, swap again — should target the CURRENT seat (line 2)
+        ex.key(KeyInput::Down);
+        assert_eq!(
+            ex.key(KeyInput::Char('s')),
+            vec![HostIntent::SwapPanes {
+                seat: LineId(2),
+                line: LineId(3)
+            }]
+        );
+        assert_eq!(ex.seat, Some(LineId(3)));
     }
 
     #[test]
