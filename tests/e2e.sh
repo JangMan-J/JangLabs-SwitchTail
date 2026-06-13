@@ -31,12 +31,16 @@ command -v script >/dev/null || skip "script(1) not available (util-linux)"
 export XDG_CACHE_HOME="$SANDBOX/cache"
 mkdir -p "$XDG_CACHE_HOME/zellij"
 cat > "$XDG_CACHE_HOME/zellij/permissions.kdl" <<EOF
+# v0.2: RunCommands added (enables open_command_pane for lines 2..N on a new board).
+# The user's real ~/.cache/zellij/permissions.kdl will re-prompt once on first
+# interactive launch after this change — the operator must approve the expanded grant.
 "$WASM" {
     ReadApplicationState
     ChangeApplicationState
     OpenTerminalsOrPlugins
     WriteToStdin
     ReadCliPipes
+    RunCommands
 }
 "file:$WASM" {
     ReadApplicationState
@@ -44,6 +48,7 @@ cat > "$XDG_CACHE_HOME/zellij/permissions.kdl" <<EOF
     OpenTerminalsOrPlugins
     WriteToStdin
     ReadCliPipes
+    RunCommands
 }
 EOF
 

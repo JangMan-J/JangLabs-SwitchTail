@@ -42,6 +42,12 @@ impl ZellijPlugin for State {
             PermissionType::OpenTerminalsOrPlugins,
             PermissionType::WriteToStdin,
             PermissionType::ReadCliPipes,
+            // v0.2: RunCommands enables native open_command_pane (lines 2..N of a
+            // new board; Phase 3 line verb). open_command_pane_in_new_tab (the first
+            // line / SpawnBoard) needs only ChangeApplicationState (already declared).
+            // Owner decision 2026-06-13; threat T-01-08 mitigated (interactive grant
+            // + verbatim argv, never shell). Deliberate wider-surface revision.
+            PermissionType::RunCommands,
         ]);
         subscribe(&[
             EventType::PaneUpdate,
@@ -49,6 +55,11 @@ impl ZellijPlugin for State {
             EventType::Key,
             EventType::PermissionRequestResult,
             EventType::CwdChanged,
+            // v0.2 COMP-11: receive immediate command-pane exit events so we can
+            // route them to Exchange::note_command_exit (exit-127 surfacing, no-kill).
+            // Verified: CommandPaneExited(u32, Option<i32>, Context) at
+            // zellij-utils-0.44.3/src/data.rs:994.
+            EventType::CommandPaneExited,
         ]);
         set_selectable(true);
     }
@@ -84,6 +95,15 @@ impl ZellijPlugin for State {
             Event::CwdChanged(PaneId::Terminal(id), cwd, _) => {
                 self.exchange
                     .note_cwd_change(LineId(id), &cwd.to_string_lossy());
+                true
+            }
+            // COMP-11 (adapter half): surface an immediate command-pane exit via
+            // Exchange::note_command_exit (logs LineExited, retains line, no-kill).
+            // Verified: CommandPaneExited(u32, Option<i32>, Context) at
+            // zellij-utils-0.44.3/src/data.rs:994. No close/kill here.
+            Event::CommandPaneExited(pane_id, status, _ctx) => {
+                let intents = self.exchange.note_command_exit(LineId(pane_id), status);
+                self.dispatch(intents);
                 true
             }
             Event::PermissionRequestResult(_) => true,
@@ -183,10 +203,25 @@ impl State {
                         open_command_pane(cmd, BTreeMap::new());
                     }
                 }
-                HostIntent::SpawnBoard { .. } => {
-                    // 01-03 wires the open_command_pane_in_new_tab shim here.
-                    // Stub: no-op for now so the adapter compiles while 01-02
-                    // defines the intent. The actual dispatch is plan 01-03's job.
+                HostIntent::SpawnBoard { command } => {
+                    // COMP-01/02 (01-03): create a new board whose first line runs
+                    // `command`. Mirrors the OpenLine arm exactly for CommandToRun
+                    // construction. The returned (Option<usize>, Option<PaneId>) is
+                    // DISCARDED — core registers the board + first line via the async
+                    // TabUpdate/PaneUpdate events (same as OpenLine discards its
+                    // Option<PaneId> return). The subsequent OpenLine intents in the
+                    // same dispatch Vec land lines 2..N on this board via FIFO order.
+                    //
+                    // Verified: open_command_pane_in_new_tab(CommandToRun,
+                    //   BTreeMap<String,String>) -> (Option<usize>, Option<PaneId>)
+                    //   at shim.rs:966. Needs ChangeApplicationState (already
+                    //   declared). No close/kill; no_kill_guard.rs stays green.
+                    if !command.is_empty() {
+                        let cmd =
+                            CommandToRun::new_with_args(&command[0], command[1..].to_vec());
+                        // Discard (tab_id, pane_id) — core reconciles via events.
+                        let _ = open_command_pane_in_new_tab(cmd, BTreeMap::new());
+                    }
                 }
                 HostIntent::PipeReply { pipe, body } => {
                     cli_pipe_output(&pipe, &body);
