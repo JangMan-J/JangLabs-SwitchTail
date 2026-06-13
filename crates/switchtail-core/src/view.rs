@@ -219,4 +219,50 @@ mod tests {
         ex.ingest_panes(panes);
         assert_eq!(render(&ex, 12, 60).len(), 12);
     }
+
+    #[test]
+    fn inverted_row_tracks_rung_line_in_ringing_first() {
+        use crate::exchange::SortMode;
+
+        let mut ex = Exchange::default();
+        ex.ingest_panes(vec![
+            PaneSnapshot {
+                id: 1,
+                title: "alpha".into(),
+                is_selectable: true,
+                ..Default::default()
+            },
+            PaneSnapshot {
+                id: 2,
+                title: "beta".into(),
+                is_selectable: true,
+                ..Default::default()
+            },
+            PaneSnapshot {
+                id: 3,
+                title: "gamma".into(),
+                is_selectable: true,
+                ..Default::default()
+            },
+        ]);
+        ex.key(KeyInput::Char('o')); // RingingFirst
+        assert_eq!(ex.sort, SortMode::RingingFirst);
+        // Navigate to line 2 (j once from line 1).
+        ex.key(KeyInput::Down);
+        assert_eq!(ex.selected_line(), Some(crate::line::LineId(2)));
+        // Ring it — line 2 re-sorts to the top.
+        ex.key(KeyInput::Char('R'));
+
+        let rows = render(&ex, 10, 80);
+        // Find the inverted (selected) row in the directory body (skip header).
+        let inverted_row = rows[1..rows.len() - 1]
+            .iter()
+            .find(|r| r.contains(INVERT));
+        assert!(inverted_row.is_some(), "no inverted row in rendered output");
+        let plain = strip_ansi(inverted_row.unwrap());
+        assert!(
+            plain.contains("beta"),
+            "inverted row should show the rung line 'beta', got: {plain}"
+        );
+    }
 }
