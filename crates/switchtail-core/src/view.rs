@@ -133,7 +133,7 @@ fn render_log(ex: &Exchange, body_rows: usize, width: usize, out: &mut Vec<Strin
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::key::KeyInput;
+    use crate::key::{BareKey, KeyInput};
     use crate::snapshot::PaneSnapshot;
 
     fn strip_ansi(s: &str) -> String {
@@ -189,7 +189,7 @@ mod tests {
         ex.pipe_op(r#"{"op":"ring","line":1,"note":"check me"}"#, None);
         let flat = strip_ansi(&render(&ex, 10, 80).join("\n"));
         assert!(flat.contains("1 RINGING"));
-        ex.key(KeyInput::Tab);
+        ex.key(KeyInput::key(BareKey::Tab));
         let flat = strip_ansi(&render(&ex, 10, 80).join("\n"));
         assert!(flat.contains("check me"));
         assert!(flat.contains("ring"));
@@ -198,8 +198,8 @@ mod tests {
     #[test]
     fn prompt_replaces_footer() {
         let mut ex = ex_with_two_lines();
-        ex.key(KeyInput::Char('i'));
-        ex.key(KeyInput::Char('h'));
+        ex.key(KeyInput::ch('i'));
+        ex.key(KeyInput::ch('h'));
         let rows = render(&ex, 10, 80);
         let flat = strip_ansi(rows.last().unwrap());
         assert!(flat.contains("say→line 1") && flat.contains('h'));
@@ -245,13 +245,13 @@ mod tests {
                 ..Default::default()
             },
         ]);
-        ex.key(KeyInput::Char('o')); // RingingFirst
+        ex.key(KeyInput::ch('o')); // RingingFirst
         assert_eq!(ex.sort, SortMode::RingingFirst);
         // Navigate to line 2 (j once from line 1).
-        ex.key(KeyInput::Down);
+        ex.key(KeyInput::key(BareKey::Down));
         assert_eq!(ex.selected_line(), Some(crate::line::LineId(2)));
         // Ring it — line 2 re-sorts to the top.
-        ex.key(KeyInput::Char('R'));
+        ex.key(KeyInput::ch('R'));
 
         let rows = render(&ex, 10, 80);
         // Find the inverted (selected) row in the directory body (skip header).

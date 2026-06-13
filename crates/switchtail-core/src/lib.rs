@@ -20,7 +20,7 @@ pub mod view;
 pub use deck::{DECK_KEYS, Deck};
 pub use exchange::{Exchange, SortMode, View};
 pub use intent::HostIntent;
-pub use key::KeyInput;
+pub use key::{BareKey, KeyBinding, KeyInput};
 pub use line::{AgentState, Line, LineId};
 pub use log::{Call, CallKind, CallLog, Triage};
 pub use protocol::PipeOp;

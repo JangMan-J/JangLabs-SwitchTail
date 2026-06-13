@@ -1,8 +1,21 @@
 //! The core's own key vocabulary. The adapter maps host key events into
 //! these; the core never sees host key types.
+//!
+//! ## Shape (v0.2, COMP-09)
+//!
+//! `BareKey` carries the seven alternatives from v0.1 (Char, Enter, Esc, Up,
+//! Down, Tab, Backspace). `KeyInput` wraps a `BareKey` with `shift` and
+//! `super_` flags so compose verbs can bind on Shift/Super without colliding
+//! with Zellij's Ctrl/Alt space. `KeyBinding` records a configured compose
+//! binding (char + required Shift/Super); `KeyInput::matches` performs the
+//! EXACT-modifier predicate (extra modifiers on the incoming key never match).
 
+/// The bare (modifier-free) key alternatives.
+///
+/// Mirrors the seven variants from the v0.1 flat `enum KeyInput`; named
+/// `BareKey` to match zellij-tile's own naming convention in `Key::bare_key`.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
-pub enum KeyInput {
+pub enum BareKey {
     Char(char),
     Enter,
     Esc,
@@ -12,13 +25,89 @@ pub enum KeyInput {
     Backspace,
 }
 
-// ---------- tests for the NEW modifier-carrying model (Task 1 RED) ----------
-#[cfg(test)]
-mod new_model_tests {
-    // These tests reference types and constructors that do NOT exist yet.
-    // They must FAIL to compile until Task 1 GREEN introduces the new shape.
+/// A modifier-carrying key event from the operator.
+///
+/// Carries `shift` and `super_` flags; Ctrl/Alt are deliberately NOT modeled
+/// here — Zellij owns that space (see COMP-09 / 01-CONTEXT.md).
+///
+/// ## Constructors
+///
+/// - `KeyInput::ch('c')` — unmodified char key
+/// - `KeyInput::key(BareKey::Tab)` — unmodified bare key
+/// - `KeyInput::new(bare, shift, super_)` — modified key
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub struct KeyInput {
+    pub bare: BareKey,
+    pub shift: bool,
+    pub super_: bool,
+}
 
-    use crate::key::{BareKey, KeyBinding, KeyInput};
+impl KeyInput {
+    /// An unmodified character key (shift=false, super_=false).
+    pub fn ch(c: char) -> Self {
+        Self {
+            bare: BareKey::Char(c),
+            shift: false,
+            super_: false,
+        }
+    }
+
+    /// An unmodified bare key (non-char, e.g. Tab / Enter / Esc).
+    pub fn key(bare: BareKey) -> Self {
+        Self {
+            bare,
+            shift: false,
+            super_: false,
+        }
+    }
+
+    /// A key with explicit Shift and/or Super modifiers.
+    pub fn new(bare: BareKey, shift: bool, super_: bool) -> Self {
+        Self { bare, shift, super_ }
+    }
+
+    /// Whether this incoming key matches a configured `KeyBinding`.
+    ///
+    /// Returns `true` iff the bare char AND the required modifier set match
+    /// EXACTLY. An incoming key carrying an EXTRA modifier the binding did not
+    /// require does NOT match — this is the anti-collision guarantee that keeps
+    /// deck digits and letter verbs safe from compose-verb capture.
+    pub fn matches(&self, b: &KeyBinding) -> bool {
+        self.bare == BareKey::Char(b.ch) && self.shift == b.shift && self.super_ == b.super_
+    }
+}
+
+/// A configured compose-verb binding: char + required Shift/Super modifiers.
+///
+/// Read from plugin config in `load()` (see `main.rs`); stored on `Exchange`
+/// as `compose_board_key`. The default (Shift+b) is chosen to be off Zellij's
+/// Ctrl/Alt space and unlikely to collide with deck digits or letter verbs.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub struct KeyBinding {
+    pub ch: char,
+    pub shift: bool,
+    pub super_: bool,
+}
+
+impl Default for KeyBinding {
+    /// Default compose binding: Shift+b.
+    ///
+    /// Choice rationale: `b` for "board"; Shift prefix keeps it off deck
+    /// digits (1-9 0) and existing letter verbs (all unmodified); Shift is
+    /// modeled in zellij-utils-0.44.3/src/data.rs:298 (enum Ctrl, Alt, Shift,
+    /// Super). Config-overridable via `compose_board_key = "Sb"` in KDL.
+    fn default() -> Self {
+        Self {
+            ch: 'b',
+            shift: true,
+            super_: false,
+        }
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
 
     #[test]
     fn plain_char_equals_same_plain_char() {
@@ -66,7 +155,7 @@ mod new_model_tests {
 
     #[test]
     fn key_binding_matches_exact_modifiers_only() {
-        // Shift+b binding
+        // Shift+b binding (the default compose_board_key)
         let binding = KeyBinding {
             ch: 'b',
             shift: true,
@@ -85,7 +174,7 @@ mod new_model_tests {
         let super_b = KeyInput::new(BareKey::Char('b'), false, true);
         assert!(!super_b.matches(&binding), "Super+b must not match Shift+b binding");
 
-        // Non-match: Shift+Super+b (EXTRA modifier — must NOT match)
+        // Non-match: Shift+Super+b — EXTRA modifier must NOT match
         let shift_super_b = KeyInput::new(BareKey::Char('b'), true, true);
         assert!(
             !shift_super_b.matches(&binding),
