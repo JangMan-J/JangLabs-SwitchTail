@@ -68,7 +68,11 @@ board-fill reconciliation under the real Zellij event model.
   5. The board compose verb is read from config as a Shift/Super-modified binding
      (off Zellij's Ctrl/Alt), and the core key model + adapter key mapping carry
      that modifier information rather than a bare character.
-**Plans**: TBD
+**Plans**: 3 plans (3 waves)
+Plans:
+- [ ] 01-01-PLAN.md — Modifier-carrying KeyInput + configurable compose-verb binding (COMP-09)
+- [ ] 01-02-PLAN.md — SpawnBoard intent + agent/board-size config + fan-out + deck-cap warning + exit-127 + async no-drift (COMP-01,02,03,10,11,12; core/TDD)
+- [ ] 01-03-PLAN.md — Adapter SpawnBoard arm + RunCommands permission + CommandPaneExited routing + live reload smoke (COMP-01,02,11; human-verify)
 **UI hint**: yes
 
 ### Phase 2: Count Grammar — N Boards in One Gesture
@@ -130,6 +134,6 @@ the line verb reuses unchanged)
 | 2. Plugin Adapter | v0.1 | — | Complete | 2026-06-12 |
 | 3. Pipes & Protocol | v0.1 | — | Complete | 2026-06-12 |
 | 4. Operator Polish & E2E | v0.1 | — | Complete | 2026-06-13 |
-| 1. Board Foundation — Spawn One Board of Agents | v0.2 | 0/0 | Not started | - |
+| 1. Board Foundation — Spawn One Board of Agents | v0.2 | 0/3 | Planned | - |
 | 2. Count Grammar — N Boards in One Gesture | v0.2 | 0/0 | Not started | - |
 | 3. Line Verb — Top Up the Current Board | v0.2 | 0/0 | Not started | - |
