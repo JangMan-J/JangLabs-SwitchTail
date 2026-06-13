@@ -46,7 +46,7 @@ Ctrl/Alt) and both follow the same verb + optional-count grammar.
 
 ### Configurable bindings & key model
 
-- [ ] **COMP-09**: The compose verbs are configurable key bindings (read from plugin config, with sensible Shift/Super defaults that avoid Zellij's Ctrl/Alt); the core key model and the adapter key mapping carry modifier information (Shift/Super), not just bare characters.
+- [x] **COMP-09**: The compose verbs are configurable key bindings (read from plugin config, with sensible Shift/Super defaults that avoid Zellij's Ctrl/Alt); the core key model and the adapter key mapping carry modifier information (Shift/Super), not just bare characters.
 
 ### Guardrails
 
@@ -61,15 +61,19 @@ Ctrl/Alt) and both follow the same verb + optional-count grammar.
 - **Per-board line-count in the gesture**: sizing an individual board's line
   count at spawn time (e.g. "this board gets 3, that one 8"). v0.2's count
   multiplies *boards* at the default size; per-board sizing is a later refinement.
+
 - **Per-line / per-board working directory**: where a spawned agent works.
   Deferred (likely rides with agent-session wiring). v0.2 spawns in the plugin's
   cwd.
+
 - **Multi-digit counts (≥10)**: single-digit (1–9) is the v0.2 ceiling; a
   larger count would need a commit/terminator step that breaks the live feel.
   Repeat the verb for more.
+
 - **Auto-spawn on plugin load**: bring up the default board automatically on a
   fresh session with no keypress. Deferred — v0.2 keeps spawning operator-driven
   (the bare board verb), avoiding surprise pane-creation and async-on-load.
+
 - **Agent-session wiring**: hosted agents push ring/status into the board
   themselves. Deferred to a later milestone; mechanism deliberately open (NOT
   assumed to be Claude Code hooks). See `seeds/agent-session-wiring.md`.
@@ -81,9 +85,11 @@ Ctrl/Alt) and both follow the same verb + optional-count grammar.
 - **Saved / named layouts**: "boot my standard 3×6." Requires a persistence
   layer (config round-trip, layout KDL, a picker UI) the project doesn't have.
   Excluded from v0.2 — composition is live and ephemeral.
+
 - **Interactive builder / preview mode**: a pending-plan view you compose then
   fire. Explicitly rejected in exploration — v0.2 is incremental/live (press →
   it happens), no commit step.
+
 - **Up-front dimension spec** (a `3×6` string parsed at load): superseded by the
   live-composition model; the dimension is the running tally of what you press.
 
@@ -101,7 +107,7 @@ Ctrl/Alt) and both follow the same verb + optional-count grammar.
 | COMP-06 | Phase 2 | pending |
 | COMP-07 | Phase 2 | pending |
 | COMP-08 | Phase 2 | pending |
-| COMP-09 | Phase 1 | pending |
+| COMP-09 | Phase 1 | Complete |
 | COMP-10 | Phase 1 | pending |
 | COMP-11 | Phase 1 | pending |
 | COMP-12 | Phase 1 | pending |
