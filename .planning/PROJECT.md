@@ -32,20 +32,25 @@ archive: `milestones/v0.1-ROADMAP.md`.
 ## Current Milestone: v0.2 Composing the Exchange
 
 **Goal:** Turn the read-only switchboard into a live composition surface — the
-operator spawns boards and lines from inside the plugin, building the exchange
-by hand the way Zellij itself grows a layout.
+operator builds the exchange by hand from inside the plugin, the way Zellij
+itself grows a layout. The unit of composition is a **board of agents**.
 
 **Target features:**
-- Compose verbs that spawn a **line** (on the current board) and a **board**,
-  live and immediate (press → it happens; no builder mode, no commit step).
-- **Parameterizable increment**: a bare verb acts in unit (1); a two-press bind
-  (instruction → value) acts in quantity (verb + count → N). "One pane or a
-  hundred depending which buttons you press."
-- **Default agent `claude`** staffs every spawned line unless a command is
-  specified; bare shell is the opt-out.
+- A **board verb** (primary) that spawns a board of `claude` lines: bare = 1
+  board of the default size (5 lines); count multiplies boards (verb+3 → 3
+  boards of 5). Live and immediate — press → it happens, no builder mode.
+- A **line verb** that adds individual `claude` line(s) to the current board:
+  bare = 1 line; verb + count = N lines.
+- **Parameterizable increment**: a bare verb acts in unit; a two-press bind
+  (verb → digit) acts in quantity. Single digit 1–9; Esc aborts.
+- **Default agent `claude`**; **default board size 5**; **verb bindings** all
+  configurable (defaults, not baked in — Shift/Super space, off Zellij's
+  Ctrl/Alt). The core key model and adapter carry modifier info.
 
 **Out of scope (v0.2):** working directory / cwd per line (deferred — likely
-rides with agent-session wiring); interactive builder/preview; saved layouts.
+rides with agent-session wiring); per-board line-count in the gesture (count
+multiplies boards at the default size); auto-spawn on plugin load (composition
+stays operator-driven); interactive builder/preview; saved layouts.
 
 **Deferred to a later milestone:** wiring the hosted agent sessions so they push
 ring/status into the board themselves (mechanism deliberately open — NOT assumed
@@ -88,7 +93,9 @@ to be Claude Code hooks). See `seeds/agent-session-wiring.md`.
 | Selection anchored by stable identity, not row index | Row-index selection drifted under view re-sort (UAT gaps 4+6) | ✓ Good (v0.1, 04-05) |
 | Seat swap composed as a 3-call placeholder exchange | `replace_pane_with_existing_pane` is one-way, not a swap (proven at host commit e9173cb); no single swap primitive exists | ✓ Good (v0.1, 04-06) |
 | v0.2: live in-plugin composition (verb+count), not an up-front spec | Zellij-native press-and-it-happens feel; keeps v0.1's pure-core grain | Pending (v0.2) |
-| v0.2: default agent `claude`; cwd out of scope | Tool exists to bring up agents; cwd is a separable later concern | Pending (v0.2) |
+| v0.2: unit of composition is a **board of agents** (default 5 lines); count multiplies boards | Operator thinks in boards-of-agents, not single lines; bare verb = 1 board of 5 | Pending (v0.2) |
+| v0.2: default agent `claude`; default board size + verb bindings configurable; cwd out of scope | Tool exists to bring up agents; bindings are defaults not contracts (Shift/Super, off Zellij Ctrl/Alt); cwd separable | Pending (v0.2) |
+| v0.2: declare `RunCommands` permission | Native command panes (re-run + exit-status UI) for restartable agent sessions; verified open_command_pane requires it. Deliberate revision of v0.1's withhold stance | Pending (v0.2) |
 
 ## Evolution
 
