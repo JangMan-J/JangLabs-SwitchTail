@@ -20,9 +20,18 @@ case "${1:-build}" in
         ;;
     reload)
         cargo build -p switchtail --target wasm32-wasip1
-        # Reload into the current/most-recent zellij session.
-        zellij action start-or-reload-plugin "file:$WASM_DEBUG"
-        echo "reloaded: $WASM_DEBUG"
+        # Deploy the DEBUG wasm to the SAME path the Alt+s keybind launches
+        # (~/.local/share/...), so launch-from-keybind and hot-reload stay in
+        # sync. Release builds SIGSEGV rustc on this box under load, so the
+        # deployed plugin is the debug artifact during development.
+        mkdir -p "$PLUGIN_DIR"
+        cp "$WASM_DEBUG" "$PLUGIN_DIR/switchtail.wasm"
+        # Hot-reload BOTH plugin identities (Zellij keys plugins by wasm path):
+        # the deployed copy that the keybind floats, and the target/ path in
+        # case an instance was launched directly from it.
+        zellij action start-or-reload-plugin "file:$PLUGIN_DIR/switchtail.wasm" || true
+        zellij action start-or-reload-plugin "file:$WASM_DEBUG" || true
+        echo "reloaded (debug): $PLUGIN_DIR/switchtail.wasm"
         ;;
     install)
         cargo build -p switchtail --target wasm32-wasip1 --release
