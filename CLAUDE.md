@@ -1,8 +1,10 @@
 # SwitchTail — lab instructions
 
-> **Lab scope**: you are in the `switchtail` lab of the JangLabs workspace —
-> its own git repo. This file is the authority inside `switchtail/`; it
-> overrides the workspace root. Don't edit sibling labs from here.
+> **Lab scope**: you are in `switchtail`, one of the independent lab repos
+> living side by side under the `~/JangLabs` workspace directory (`~/JangLabs`
+> is not itself a git repo or a project — just a parent folder of sibling
+> repos). This file is the authority inside `switchtail/`; it takes precedence
+> over the workspace-level `~/JangLabs/CLAUDE.md`. Don't edit sibling labs from here.
 
 SwitchTail is the **operator's switchboard for agentic terminals** — a Zellij
 plugin (Rust → `wasm32-wasip1`, zellij-tile 0.44.x on a zellij 0.45 host).
@@ -61,6 +63,7 @@ resurrect kitty-era code paths from old memory — the architecture changed.
 
 - Trunk-based on `main`; small atomic commits, conventional-commit style
   (`feat(core): …`, `feat(plugin): …`, `docs: …`, `test: …`).
-- GSD planning lives in `.planning/` (fresh v0.1 milestone docs).
+- GSD planning lives in `.planning/`; see `.planning/STATE.md` for the active
+  milestone (v0.1 shipped; v0.2 "Composing the Exchange" is current).
 - Rust 2021, `cargo fmt` defaults, clippy-clean where cheap; tests live next
   to the code (`#[cfg(test)]`) for the core crate.
